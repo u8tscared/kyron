@@ -114,6 +114,7 @@ function checkResult(r, label, stroke) {
   ok(r.best.gainPct > 0, `${label} : gain positif`, `gainPct ${f(r.best.gainPct, 1)} (vitesse ${f(g.speedPct, 1)} %, effet ${f(g.spinPct, 1)} %, réussite ${f(g.successPts, 1)} pts)`);
   ok(g.speedPct <= 15 && g.speedPct > -10, `${label} : gain de vitesse borné (≤ 15 %)`, `${f(g.speedPct, 1)} %`);
   ok(r.best.params.separation <= 55, `${label} : séparation ≤ 55°`, f(r.best.params.separation));
+  ok(['d1', 'd2', 'd3'].every((k) => r.best.params[k] >= 5 - 1e-9), `${label} : chaîne proximo-distale respectée (écarts ≥ 5 ms)`, ['d1', 'd2', 'd3'].map((k) => f(r.best.params[k], 0)).join(' / ') + ' ms');
   ok(r.best.params.kneeFlex <= (stroke === 'serve' ? 95 : 75), `${label} : flexion des genoux sous le seuil`, f(r.best.params.kneeFlex));
   ok(r.best.shoulderIR <= Math.max(r.current.shoulderIR * 1.1001, 0), `${label} : rotation interne d'épaule ≤ +10 %`, `${f(r.current.shoulderIR, 0)} → ${f(r.best.shoulderIR, 0)} °/s`);
   ok(Math.abs(r.best.successSurrogate - r.best.successRate) < 0.05, `${label} : surrogate validé par la vraie intégration (|ΔP| < 5 pts)`,
@@ -141,6 +142,27 @@ function checkResult(r, label, stroke) {
 for (const [stroke, goal] of [['forehand', 'spin'], ['backhand', 'balanced'], ['serve', 'safety']]) {
   const r = await runOptimization({ res: null, stroke, equipment: EQ, conditions: COND, goal, budget: 'quick' });
   checkResult(r, `${stroke} / ${goal} (profil par défaut)`, stroke);
+}
+
+section('3 bis. Robustesse');
+{
+  // Geste actuel HORS contraintes de sécurité (séparation 60°, genoux 99°) : l'actuel doit rester chiffrable
+  // (avant correction : finalize lisait null.sigmaAngle quand aucune visée n'était admissible)
+  const bad = { ...RES_SERVE, simInput: { ...RES_SERVE.simInput, separation: 60, kneeFlex: 99, d3: -21 } };
+  let r = null, err = null;
+  try { r = await runOptimization({ res: bad, stroke: 'serve', equipment: EQ, conditions: COND, goal: 'speed', budget: 'quick' }); } catch (e) { err = e; }
+  ok(!err && r && Number.isFinite(r.current.ballKmh) && r.current.outsideSafety === 'separation' && r.equipment && Number.isFinite(r.equipment.current.ballKmh),
+    'geste actuel hors contraintes : pas d’erreur, actuel chiffré et signalé', err ? err.message : `outsideSafety = ${r.current.outsideSafety}`);
+  ok(r && r.best.params.separation <= 55 && ['d1', 'd2', 'd3'].every((k) => r.best.params[k] >= 5),
+    'la cible repasse dans les contraintes et remet la chaîne dans l’ordre', r ? `séparation ${f(r.best.params.separation)}°, d3 ${f(r.current.params.d3, 0)} → ${f(r.best.params.d3, 0)} ms` : '');
+  const sd3 = r?.sensitivity.find((x) => x.key === 'd3');
+  ok(sd3 && sd3.gainPct > 0 && sd3.to >= 5, 'sensibilité (objectif vitesse) : remettre le poignet après le coude est un gain', sd3 ? `d3 ${f(sd3.from, 0)} → ${f(sd3.to, 0)} ms : +${f(sd3.gainPct, 2)} %` : 'absente');
+  // Tranche vide / course entre workers : finalize sans élites ni matériel
+  const W = await import('../app/core/opt-worker.js');
+  const Pb = W.buildProblem({ stroke: 'serve', sim: { ...bad.simInput, height: 1.86 }, equipment: EQ, conditions: COND, goal: 'speed' });
+  let fin = null; err = null;
+  try { fin = W.finalize(Pb, { elites: [], equipBest: null, mcN: 300 }); } catch (e) { err = e; }
+  ok(!err && fin.best.isCurrent && fin.best.gainPct === 0 && fin.equipment.isCurrent, 'finalize sans élite ni matériel (tranche vide) : renvoie l’actuel', err ? err.message : 'ok');
 }
 
 section('4. Annulation');

@@ -40,10 +40,13 @@ const NP = 9;
 // Ordres de grandeur : la littérature attribue ~50 % de l'énergie du service aux jambes et au tronc, mais un
 // changement de technique RÉALISTE ne déplace la vitesse de balle que de quelques % (Elliott 2003, Girard 2005,
 // Reid 2008) — d'où des amplitudes A modestes, et une enveloppe totale « mauvais → optimal » d'environ ×1,4.
+// Écart minimal entre pics successifs de la chaîne cinétique (ms) : la cible proposée respecte toujours l'ordre
+// proximal → distal enseigné (bassin → buste → coude → poignet). Le geste ACTUEL peut, lui, être hors de cet ordre.
+export const GAP_MIN = 5;
 const STROKES = {
   serve: {
     target: 'service', x0: 0, u: 0, h0: null, wristToCenter: 0.47,
-    lo: [0, 0, 120, 1.0, -40, -40, -40, -10, -20], hi: [95, 60, 178, 1.55, 140, 140, 140, 30, 20],
+    lo: [0, 0, 120, 1.0, GAP_MIN, GAP_MIN, GAP_MIN, -10, -20], hi: [95, 60, 178, 1.55, 140, 140, 140, 30, 20],
     trust: [20, 15, 20, 0.1, 40, 40, 40, 5, 5],
     knee: { opt: 70, wLo: 30, wHi: 18, A: 0.08, reject: 95 },
     sep: { opt: 40, wLo: 20, wHi: 14, A: 0.07 },
@@ -56,7 +59,7 @@ const STROKES = {
   },
   forehand: {
     target: 'base', x0: -1, u: 18, h0: 0.95, wristToCenter: 0,
-    lo: [0, 0, 90, 1, -40, -40, -40, 5, -10], hi: [75, 60, 178, 1, 140, 140, 140, 45, 15],
+    lo: [0, 0, 90, 1, GAP_MIN, GAP_MIN, GAP_MIN, 5, -10], hi: [75, 60, 178, 1, 140, 140, 140, 45, 15],
     trust: [20, 15, 25, 0, 40, 40, 40, 5, 5],
     knee: { opt: 45, wLo: 25, wHi: 15, A: 0.05, reject: 75 },
     sep: { opt: 40, wLo: 20, wHi: 14, A: 0.07 },
@@ -69,7 +72,7 @@ const STROKES = {
   },
   backhand: {
     target: 'base', x0: -1, u: 18, h0: 0.9, wristToCenter: 0,
-    lo: [0, 0, 100, 1, -40, -40, -40, 5, -10], hi: [75, 60, 178, 1, 140, 140, 140, 42, 15],
+    lo: [0, 0, 100, 1, GAP_MIN, GAP_MIN, GAP_MIN, 5, -10], hi: [75, 60, 178, 1, 140, 140, 140, 42, 15],
     trust: [20, 15, 20, 0, 40, 40, 40, 5, 5],
     knee: { opt: 42, wLo: 25, wHi: 15, A: 0.05, reject: 75 },
     sep: { opt: 35, wLo: 18, wHi: 14, A: 0.06 },
@@ -98,7 +101,7 @@ function seqEff(d1, d2, d3, Q) {
   for (let i = 0; i < 3; i++) {
     const d = i === 0 ? d1 : i === 1 ? d2 : d3;
     let z = (d - Q.opt) / (d < Q.opt ? Q.wLo : Q.wHi);
-    if (d < 0) z -= d / 10;
+    if (d < 0) z += d / 10; // z < 0 ici : on l'éloigne encore de l'optimum (pénalité supplémentaire)
     s += 1 / (1 + z * z);
   }
   return 1 - Q.A * (1 - s / 3);
@@ -168,7 +171,13 @@ export function buildProblem(cfg) {
   x0[3] = serve ? num(sim.contactRatio, D.contactRatio) : 1;
   x0[4] = num(sim.d1, D.d1); x0[5] = num(sim.d2, D.d2); x0[6] = num(sim.d3, D.d3);
   x0[7] = num(sim.alphaDeg, D.alphaDeg); x0[8] = num(sim.phiDeg, NaN);
-  for (let i = 0; i < NP; i++) if (i !== 8) x0[i] = Math.min(M.hi[i], Math.max(M.lo[i], x0[i]));
+  // Bornage du geste mesuré, sauf les écarts de timing : un écart négatif mesuré est conservé tel quel (c'est un
+  // défaut réel du joueur, il doit apparaître dans « actuel » et dans la sensibilité)
+  for (let i = 0; i < NP; i++) {
+    if (i === 8) continue;
+    const lo = i >= 4 && i <= 6 ? -150 : M.lo[i];
+    x0[i] = Math.min(M.hi[i], Math.max(lo, x0[i]));
+  }
   const active = new Uint8Array(NP);
   for (let i = 0; i < NP; i++) active[i] = M.trust[i] > 0 ? 1 : 0;
   // Conditions
@@ -214,7 +223,7 @@ export function buildProblem(cfg) {
   if (!Number.isFinite(x0[8])) {
     let bestP = -1, bestF = 0;
     for (let f = M.lo[8]; f <= M.hi[8]; f += 0.1) {
-      x0[8] = f; evalX(Pb, x0, Pb.eq0, Pb.m);
+      x0[8] = f; evalX(Pb, x0, Pb.eq0, Pb.m, true);
       if (Pb.m[2] > bestP + 1e-9) { bestP = Pb.m[2]; bestF = f; }
     }
     x0[8] = bestF;
@@ -224,7 +233,8 @@ export function buildProblem(cfg) {
     hi[i] = active[i] ? Math.min(M.hi[i], x0[i] + M.trust[i]) : x0[i];
     if (hi[i] < lo[i]) { lo[i] = hi[i] = x0[i]; }
   }
-  evalX(Pb, x0, Pb.eq0, Pb.m);
+  evalX(Pb, x0, Pb.eq0, Pb.m, true);
+  Pb.currentRejected = Pb.m[7];
   Pb.ref = { kmh: Pb.m[0], spin: Pb.m[1], P: Pb.m[2], load: Pb.m[3], comfort: Pb.eq0.comfort };
   Pb.cur = metricsObj(Pb.m);
   Pb.J0 = objective(Pb, Pb.m, Pb.eq0);
@@ -263,17 +273,19 @@ function speedFactors(Pb, x) {
 
 // Évaluation d'un geste. m (Float64Array(10)) ← [km/h, tr/min, P(bonne), charge épaule (IR/IR_lim), angle de départ,
 // V raquette (m/s), hauteur d'impact, code de rejet, IR estimée (°/s), σ angle effectif]. Renvoie l'objectif ou −∞.
-export function evalX(Pb, x, eq, m) {
+// force = true : évalue même un geste hors contraintes (le geste ACTUEL du joueur doit toujours être chiffrable ;
+// le code de rejet reste dans m[7]).
+export function evalX(Pb, x, eq, m, force = false) {
   const M = Pb.M;
   const k = x[0], s = x[1], el = x[2], c = x[3];
   m[7] = REJ.none;
   // --- Contraintes de sécurité articulaire (rejet dur) ---
-  if (s > SAFETY.separationMax) { m[7] = REJ.separation; return -Infinity; } // charge lombaire (Campbell 2013)
-  if (k > M.knee.reject) { m[7] = REJ.knee; return -Infinity; }
+  if (s > SAFETY.separationMax) { m[7] = REJ.separation; if (!force) return -Infinity; } // charge lombaire (Campbell 2013)
+  if (k > M.knee.reject && !m[7]) { m[7] = REJ.knee; if (!force) return -Infinity; }
   if (Pb.serve) {
     // Allonge atteignable : épaule ≈ 0,82 H + bras ≈ 0,44 H, moins le coude fléchi, plus la poussée des jambes
     const cMax = Math.max(1.3 + 0.0018 * k - 0.004 * (180 - el), Pb.x0[3] + 0.02);
-    if (c > cMax) { m[7] = REJ.reach; return -Infinity; }
+    if (c > cMax && !m[7]) { m[7] = REJ.reach; if (!force) return -Infinity; }
   }
   // --- Chaîne cinétique → vitesse de raquette ---
   const fL = seg(k, M.knee.opt, M.knee.wLo, M.knee.wHi, M.knee.A);
@@ -289,7 +301,7 @@ export function evalX(Pb, x, eq, m) {
   const r = Pb.prox0 / prox;
   const IR = Pb.IR0 * (V / Pb.V0) * r * r * Math.sqrt(r) * eq.loadF;
   m[8] = IR;
-  if (IR > Pb.IRlim) { m[7] = REJ.shoulder; return -Infinity; }
+  if (IR > Pb.IRlim && !m[7]) { m[7] = REJ.shoulder; if (!force) return -Infinity; }
   // --- Impact ---
   const o = impactSolveInto(eq.imp, V, x[7], x[8], M.u, Pb.tmpI);
   const speed = o[0], launch = o[1], spin = o[2];
@@ -580,7 +592,9 @@ function comboAt(i) {
 const AIM = [-3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3];
 export const EQUIP_EVALS_PER_COMBO = AIM.length;
 
-function evalEquip(Pb, eq, out) {
+// force = true (matériel ACTUEL) : si aucune visée n'est admissible (geste actuel hors contraintes de sécurité),
+// on chiffre quand même le geste tel quel au lieu de renvoyer null.
+function evalEquip(Pb, eq, out, force = false) {
   const x = Float64Array.from(Pb.x0), m = Pb.m;
   let bJ = -Infinity, bM = null, bPhi = x[8];
   for (const da of AIM) {
@@ -588,6 +602,7 @@ function evalEquip(Pb, eq, out) {
     const J = evalX(Pb, x, eq, m);
     if (J > bJ) { bJ = J; bM = metricsObj(m); bPhi = x[8]; }
   }
+  if (!bM && force) { x[8] = Pb.x0[8]; bJ = evalX(Pb, x, eq, m, true); bM = metricsObj(m); bPhi = x[8]; }
   out.J = bJ; out.m = bM; out.phi = bPhi;
   return out;
 }
@@ -643,9 +658,9 @@ export function finalize(Pb, { elites, equipBest, nValidate = 10, mcN = 3000, se
   const rng = makeRng(seed * 7919 + 3);
   let flights = 0;
   const m = Pb.m;
-  const evalFull = (x, eq = Pb.eq0) => { const J = evalX(Pb, x, eq, m); return { J, mo: metricsObj(m), rej: m[7] }; };
+  const evalFull = (x, eq = Pb.eq0, force = false) => { const J = evalX(Pb, x, eq, m, force); return { J, mo: metricsObj(m), rej: m[7] }; };
   // actuel validé
-  const cur = evalFull(Pb.x0);
+  const cur = evalFull(Pb.x0, Pb.eq0, true); // toujours chiffrable, même hors contraintes de sécurité
   const P0v = validateP(Pb, cur.mo, cur.mo.sigmaAngle, 1, mcN, rng); flights += mcN;
   const refV = { ...Pb.ref, P: P0v };
   const J = (mo, eq = Pb.eq0) => {
@@ -668,26 +683,30 @@ export function finalize(Pb, { elites, equipBest, nValidate = 10, mcN = 3000, se
   // les effets ne sont PAS additifs (couplages vitesse ↔ fenêtre d'angle).
   const sensitivity = [];
   const xb = best.x;
+  // Si le geste reste hors contraintes (l'actuel l'est déjà), on chiffre quand même (force) et on le signale.
   const reAim = (x) => {
-    let bJ = -Infinity, bMo = null;
-    for (const da of AIM) {
-      x[8] = Math.min(Pb.hi[8], Math.max(Pb.lo[8], Pb.x0[8] + da));
-      const r = evalFull(x);
-      if (r.J > bJ) { bJ = r.J; bMo = r.mo; }
+    for (const force of [false, true]) {
+      let bJ = -Infinity, bMo = null;
+      for (const da of AIM) {
+        x[8] = Math.min(Pb.hi[8], Math.max(Pb.lo[8], Pb.x0[8] + da));
+        const r = evalFull(x, Pb.eq0, force);
+        if (r.J > bJ) { bJ = r.J; bMo = r.mo; }
+      }
+      if (bMo) return { mo: bMo, feasible: !force };
     }
-    return bJ === -Infinity ? null : bMo;
+    return null;
   };
   const base = reAim(Float64Array.from(Pb.x0));
-  const g0 = base ? gainPct(Pb, base) : 0; // part due à la seule re-visée, retranchée
+  const g0 = base ? gainPct(Pb, base.mo) : 0; // part due à la seule re-visée, retranchée
   for (let i = 0; i < NP; i++) {
     if (i === 8 || !Pb.active[i] || Math.abs(xb[i] - Pb.x0[i]) < 1e-9) continue;
     const x = Float64Array.from(Pb.x0); x[i] = xb[i];
-    const mo = reAim(x);
+    const r = reAim(x);
     const key = PARAM_KEYS[i];
     sensitivity.push({
       key, label: PARAM_META[key].label, unit: PARAM_META[key].unit, from: Pb.x0[i], to: xb[i],
-      gainPct: mo ? gainPct(Pb, mo) - g0 : 0,
-      feasible: !!mo,
+      gainPct: r ? gainPct(Pb, r.mo) - g0 : 0,
+      feasible: !!r && r.feasible, // false : ce seul changement laisse le geste hors contraintes de sécurité
     });
   }
   sensitivity.sort((a, b) => b.gainPct - a.gainPct);
@@ -695,7 +714,7 @@ export function finalize(Pb, { elites, equipBest, nValidate = 10, mcN = 3000, se
   let equipment = null;
   {
     const o = {};
-    evalEquip(Pb, Pb.eq0, o);
+    evalEquip(Pb, Pb.eq0, o, true);
     const curEq = o.m;
     const PcurEq = validateP(Pb, curEq, curEq.sigmaAngle, 1, mcN, rng); flights += mcN;
     curEq.comfort = Pb.eq0.comfort;
@@ -705,9 +724,11 @@ export function finalize(Pb, { elites, equipBest, nValidate = 10, mcN = 3000, se
       const rk = customize(c.racket, c.leads);
       const eq = makeEquip(Pb, rk, c.string, c.tension, c.gauge);
       evalEquip(Pb, eq, o);
-      const Pv = validateP(Pb, o.m, o.m.sigmaAngle, 1, mcN, rng); flights += mcN;
-      const cand = { ...o.m, successRate: Pv, comfort: eq.comfort };
-      if (J(cand, eq) > J({ ...curEq, successRate: PcurEq }, Pb.eq0)) { bestEq = cand; combo = c; isCurrent = false; }
+      if (o.m) { // null si aucune visée admissible : on garde le matériel actuel
+        const Pv = validateP(Pb, o.m, o.m.sigmaAngle, 1, mcN, rng); flights += mcN;
+        const cand = { ...o.m, successRate: Pv, comfort: eq.comfort };
+        if (J(cand, eq) > J({ ...curEq, successRate: PcurEq }, Pb.eq0)) { bestEq = cand; combo = c; isCurrent = false; }
+      }
     }
     const E = Pb.eqCfg;
     const refEq = { ...refV, kmh: curEq.ballKmh, spin: curEq.spinRpm, P: PcurEq, load: curEq.load };
@@ -729,7 +750,7 @@ export function finalize(Pb, { elites, equipBest, nValidate = 10, mcN = 3000, se
   };
   return {
     flights,
-    current: { racketKmh: curOut.racketKmh, ballKmh: curOut.ballKmh, spinRpm: curOut.spinRpm, successRate: curOut.successRate, successSurrogate: curOut.successSurrogate, launchDeg: curOut.launchDeg, shoulderIR: curOut.ir, params: paramsObj(Pb, Pb.x0, curOut.launchDeg) },
+    current: { racketKmh: curOut.racketKmh, ballKmh: curOut.ballKmh, spinRpm: curOut.spinRpm, successRate: curOut.successRate, successSurrogate: curOut.successSurrogate, launchDeg: curOut.launchDeg, shoulderIR: curOut.ir, params: paramsObj(Pb, Pb.x0, curOut.launchDeg), outsideSafety: ['', 'separation', 'knee', 'shoulder', 'reach'][Pb.currentRejected] || null },
     best: {
       params: paramsObj(Pb, best.x, bo.launchDeg), ballKmh: bo.ballKmh, spinRpm: bo.spinRpm, successRate: bo.successRate,
       successSurrogate: bo.successSurrogate, racketKmh: bo.racketKmh, shoulderIR: bo.ir,
