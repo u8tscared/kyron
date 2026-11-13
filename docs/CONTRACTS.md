@@ -261,3 +261,43 @@ Après le pic de vitesse du poignet (= impact détecté), chaque paramètre du g
 (tronc et bassin τ = 0,2 s, bras en rotation τ = 0,1 s) et rejoint la pose prévue 0,5 s plus tard par un raccord C¹.
 Coup droit et revers : rien ne change avant l'impact. Service : quelques transitions (armé, poussée, inclinaisons du tronc) ont été
 élargies pour des accélérations réalistes.
+
+## Contrat — comptes et données (app/ui/account.js, app/config.js)
+
+Propriétaire : agent comptes. Fichiers : `app/ui/account.js`, `app/config.js`, `app/lib/supabase.js` (vendu, chargé à la demande),
+`docs/supabase-setup.sql`, `docs/SUPABASE.md`, `tests/account.test.mjs`.
+
+`app/config.js` : `export const SUPABASE = { url, anonKey }` (vides = mode local ; `maxVideoMB` optionnel, 300 par défaut).
+Moteur `'cloud'` (Supabase) seulement si la config est remplie **et** que `app/lib/supabase.js` se charge ; sinon `'local'`
+(IndexedDB `kyron`, stores users / profiles / sessions / blobs ; repli mémoire avec `account.persistent === false`).
+Le cloud demande un hébergement qui autorise `fetch` vers `*.supabase.co` (GitHub Pages…) : pas l'Artifact claude.ai.
+
+```js
+import { account } from './account.js';
+account.backend → 'cloud' | 'local'        account.persistent → bool        account.recovering → bool (lien « mot de passe oublié » ouvert)
+await account.init() → user | null          // à appeler une fois au démarrage (les autres méthodes l'appellent aussi)
+await account.signUp({ email, password, name }) → user     // mot de passe ≥ 8 caractères
+await account.signIn({ email, password }) → user
+await account.signOut();  await account.resetPassword(email);  await account.updatePassword(newPassword)  // ajout
+account.user() → { id, email, name } | null;  account.onChange((user, { event }) => …) → unsubscribe
+await account.getProfile() / saveProfile(patch) → { name, level: 'amateur'|'competition'|'pro'|'coach', hand: 'R'|'L',
+  heightCm, massKg, sex?, racket?, strings?, mode: 'simple'|'expert', onboarded, …champs libres conservés (goals, legacyImported) }
+await account.saveSession({ stroke, source: 'video'|'demo'|'2cam'|'match', createdAt, summary, result, video?: Blob, thumb?: Blob },
+  { onProgress?: (ratio 0–1, { loaded, total }) => … }) → id
+await account.listSessions({ limit = 50 }) → [{ id, stroke, source, createdAt (ISO), summary, thumbUrl, hasVideo }]  // plus récent d'abord
+await account.getSession(id) → { …élément de liste, result, videoUrl }   // URL d'objet (local) ou URL signée 1 h (cloud)
+await account.deleteSession(id);  await account.deleteAccount()
+await account.migrateLegacy() → { imported, skipped, reason? }   // kyron-history, kyron-eleves, kyron-profile, kyron-mode, kyron-goals
+```
+
+- `result` est réduit avant stockage (≤ 2,5 Mo de JSON) : nombres à 7 chiffres significatifs, longs tableaux typés retirés, puis
+  si besoin les plus gros tableaux d'images (`frames`, landmarks…) remplacés par `null` ; alors `result.framesDropped = true` et
+  `result.droppedPaths = [...]`. `summary` est limité à 64 Ko.
+- Erreurs : `AccountError` (`instanceof Error`), `.message` en français prêt à afficher, `.code` parmi : `invalid_email`,
+  `weak_password`, `email_taken`, `invalid_credentials`, `email_not_confirmed`, `confirm_email` (inscription réussie mais
+  email à confirmer : pas de connexion), `not_signed_in`, `not_found`, `invalid_session`, `video_too_large`, `upload_failed`,
+  `rate_limited`, `network`, `storage_full`, `setup_missing`, `local_unsupported`, `insecure_context`, `unknown`.
+- Vidéo > 300 Mo : refusée avant tout envoi (`video_too_large`). En cloud, si le serveur refuse la vidéo (limite du projet,
+  50 Mo en gratuit) ou si l'envoi échoue, la séance est **quand même enregistrée sans vidéo** et l'erreur porte `err.sessionId`.
+- `migrateLegacy` : le premier compte connecté sur l'appareil (par moteur) reprend l'ancien historique ; rejouable sans doublon ;
+  les anciennes clés ne sont pas effacées ; l'ancien profil ne remplit le nouveau que s'il n'est pas encore `onboarded`.

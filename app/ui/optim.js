@@ -3,6 +3,8 @@ import { $, $$, f, fi, big, esc, fit, C, clamp, on, emit, reduced, STROKE_FR, an
 import { S, cur } from './state.js';
 import { M, optimize, has } from './core.js';
 import { SWING_DEF, tensionNow } from './physics-ui.js';
+import { help } from './glossary.js';
+import { ICON, reveal as revealEls } from './kit.js';
 
 const BUDGET_N = { quick: 1e6, full: 10e6, max: 50e6 };
 let ctl = null, debounce = 0, raf = 0, shown = 0, lastTick = 0, reveal = 1, hoverPt = null;
@@ -26,8 +28,19 @@ export function init() {
   cv.addEventListener('pointerleave', () => { hoverPt = null; $('#cloudTip').hidden = true; drawCloud(); });
   window.addEventListener('resize', () => { if (visible()) { drawCloud(); drawTrace(); } });
   coreGrid();
+  $('#gMore').addEventListener('click', () => { gOpen = !gIsOpen(); syncG(); if (gIsOpen()) requestAnimationFrame(() => { drawCloud(); drawTrace(); }); });
+  on('mode', syncG);
+  syncG();
 }
-export function show() { render(); loop(); }
+let gOpen = null;
+const gIsOpen = () => (gOpen == null ? S.mode === 'adv' : gOpen);
+function syncG() {
+  const o = gIsOpen();
+  $('#gFull').classList.toggle('open', o);
+  $('#gMore').setAttribute('aria-expanded', String(o));
+  $('#gMore span').textContent = o ? 'Masquer le détail' : 'Voir le détail de la simulation';
+}
+export function show() { render(); loop(); revealEls($('#gHow')); }
 const visible = () => !$('#v-optimiseur').hidden;
 
 function schedule(ms) { clearTimeout(debounce); debounce = setTimeout(() => run('full'), ms); }
@@ -70,7 +83,7 @@ export async function run(budget = 'full') {
   }
 }
 
-function busyDot(on) { $('.tabs a[data-r="optimiseur"]').classList.toggle('busy', on); }
+function busyDot(on) { $('.tabs a[data-r="labo"]')?.classList.toggle('busy', on); document.body.classList.toggle('opt-busy', on); }
 function coreGrid() {
   const n = O().result?.workers || Math.max(1, Math.min(32, (navigator.hardwareConcurrency || 4) - 1));
   $('#oCoreGrid').innerHTML = Array.from({ length: n }, () => '<i></i>').join('');
@@ -104,7 +117,7 @@ function loop() {
 
 function paintCounter() {
   const o = O(), N = BUDGET_N[o.budget] || 1e7;
-  $('#oTrials').innerHTML = `${fi(shown)}<small>essais</small>`;
+  $('#oTrials').innerHTML = `${fi(shown)}<small>variantes</small>`;
   const el = ((o.status === 'running' ? performance.now() : (o.endedAt || performance.now())) - (o.startedAt || performance.now())) / 1000;
   $('#oTime').textContent = `${f(o.status === 'done' && o.result?.ms ? o.result.ms / 1000 : el, 1)} s`;
   const rate = o.status === 'done' && o.result?.ms ? o.result.trials / (o.result.ms / 1000) : o.progress?.trialsPerSec;
@@ -123,8 +136,8 @@ function render() {
   coreGrid();
   $('#optTop').className = `opt-top ${o.status === 'running' ? 'running' : o.status === 'done' ? 'done' : ''}`;
   $('#oBudget').textContent = big(BUDGET_N[o.budget] || 1e7);
-  $('#oSrc').textContent = s ? `${STROKE_FR[s.type]} · frappe ${S.strokeIdx + 1}${S.session?.source === 'demo' ? ' · démo' : ''}` : '—';
-  const st = { idle: "En attente d'une analyse", running: 'Recherche en cours', done: 'Recherche terminée', error: 'Optimisation interrompue' }[o.status];
+  $('#oSrc').textContent = s ? `· ${STROKE_FR[s.type]}${S.session?.strokes?.length > 1 ? `, frappe ${S.strokeIdx + 1}` : ''}${S.session?.source === 'demo' ? ' (exemple)' : ''}` : '';
+  const st = { idle: "En attente d'une analyse", running: 'Simulation en cours', done: 'Simulation terminée', error: 'Simulation interrompue' }[o.status];
   $('#oState').innerHTML = o.status === 'running' ? `<span class="live"><i></i>${st}</span>` : st;
   $('#optMax').disabled = !s; $('#optRun').disabled = !s;
   paintCounter();
@@ -148,7 +161,62 @@ function render() {
     $('#oMsg').textContent = 'Chaque variante est un geste complet : impact raquette-balle, vol dans l\'air, rebond, et contrôle des contraintes sur l\'épaule, le coude et le dos.';
   } else if (o.status === 'idle') { $('#oGain').textContent = '—'; $('#oPct').textContent = '—'; }
   renderSens(r); renderBest(r, s); renderEq(r);
+  renderGeste(o, r, s);
   drawCloud(); drawTrace();
+}
+
+// ---------- Vue simple : avant / après + changements en phrases ----------
+const SENT = {
+  kneeFlex: ['Plie davantage les genoux avant de pousser vers la balle', 'Plie un peu moins les genoux'],
+  separation: ['Tourne les épaules plus loin que les hanches pendant la préparation', 'Réduis la torsion entre hanches et épaules'],
+  elbowImpact: ['Tends davantage le bras au moment de l’impact', 'Garde le coude un peu plus fléchi à l’impact'],
+  contactRatio: ['Va chercher la balle plus haut', 'Frappe la balle un peu plus bas'],
+  d1: ['Laisse le bassin partir un peu avant le buste', 'Enchaîne plus vite le bassin et le buste'],
+  d2: ['Attends un peu plus avant de lancer le bras', 'Lance le bras plus tôt après la rotation du buste'],
+  d3: ['Laisse le poignet fouetter un peu plus tard', 'Relâche le poignet plus tôt après le coude'],
+  alphaDeg: ['Fais monter davantage la raquette vers la balle', 'Fais passer la raquette plus à plat'],
+  phiDeg: ['Ouvre un peu plus la face de la raquette', 'Ferme un peu plus la face de la raquette'],
+  launchDeg: ['Vise un peu plus haut au-dessus du filet', 'Vise un peu plus bas, plus tendu'],
+};
+const GKEY = { kneeFlex: 'kneeFlex', separation: 'separation', elbowImpact: 'elbowImpact', contactRatio: 'contactRatio', d1: 'sequence', d2: 'sequence', d3: 'sequence' };
+function sentence(x) {
+  const t = SENT[x.key]; if (!t) return esc(x.label);
+  const up = Number.isFinite(x.from) && Number.isFinite(x.to) ? x.to >= x.from : true;
+  return t[up ? 0 : 1];
+}
+function renderGeste(o, r, s) {
+  const empty = !s;
+  $('#gEmpty').hidden = !empty;
+  $('#optTop').hidden = empty; $('#gResult').hidden = empty; $('#gMore').hidden = empty; $('.goal-row').hidden = empty;
+  if (empty) {
+    $('#gEmpty').innerHTML = `<span class="ec-ic">${ICON.ghost}</span><h2>Le simulateur part de ton geste</h2><p>Analyse d’abord une vidéo : KYRON pourra ensuite rejouer ton geste des millions de fois et te montrer comment gagner en vitesse et en effet, sans risque pour ton corps.</p><div class="ec-acts"><a class="btn solid" href="#analyser">Analyser un geste</a><button class="btn" type="button" id="gDemo">Voir un exemple</button></div>`;
+    $('#gDemo').onclick = async () => { (await import('./seance.js')).loadDemo(); render(); };
+    return;
+  }
+  const el = $('#gResult');
+  if (o.status === 'running' || o.status === 'idle') {
+    const pb = o.progress?.best;
+    el.innerHTML = `<div class="g-wait"><span class="live"><i></i>Recherche en cours</span><p>Chaque variante est un geste complet : impact raquette-balle, vol dans l’air, rebond, puis contrôle des contraintes sur ton épaule, ton coude et ton dos.${pb?.ballKmh ? ` Meilleure vitesse trouvée pour l’instant : <b class="mono">${fi(pb.ballKmh)} km/h</b>.` : ''}</p></div>`;
+    return;
+  }
+  if (o.status === 'error' || !r) { el.innerHTML = `<div class="g-wait"><p>Le simulateur n’a pas pu terminer${o.error ? ` : ${esc(o.error)}` : ''}. Réessaie avec « Relancer » dans le détail.</p></div>`; return; }
+  const c = r.current || {}, b = r.best || {};
+  const card = (lbl, g, a, z, unit, d, dec = 0) => {
+    if (!Number.isFinite(z)) return '';
+    const diff = Number.isFinite(a) ? z - a : null;
+    return `<div class="ba-c"><span class="lbl">${lbl}${help(g)}</span><div class="ba-v"><span class="mono was">${Number.isFinite(a) ? f(a, dec) : '—'}</span><span class="arr">→</span><b class="mono">${f(z, dec)}</b><small>${unit}</small></div>${diff != null ? `<span class="ba-d ${Math.abs(diff) < (dec ? 0.5 : 1) ? '' : diff > 0 ? 'up' : 'down'}">${diff >= 0 ? '+' : '−'}${f(Math.abs(diff), dec)} ${unit}${d ? ` · ${d}` : ''}</span>` : ''}</div>`;
+  };
+  const sens = (r.sensitivity || []).filter((x) => Number.isFinite(x.gainPct) && x.gainPct > 0.15).slice(0, 3);
+  const rej = r.rejected?.total || 0;
+  el.innerHTML = `<div class="ba">
+      ${card('Vitesse de balle', 'ballKmh', c.ballKmh, b.ballKmh, 'km/h')}
+      ${card('Effet', 'spin', Number.isFinite(c.spinRpm) ? Math.abs(c.spinRpm) : null, Number.isFinite(b.spinRpm) ? Math.abs(b.spinRpm) : null, 'tr/min')}
+      ${card('Balles dans le court', 'successRate', Number.isFinite(c.successRate) ? c.successRate * 100 : null, Number.isFinite(b.successRate) ? b.successRate * 100 : null, '%')}
+      <div class="ba-c safe"><span class="lbl">Marge de sécurité${help('safety')}</span><div class="ba-v"><span class="safe-ic">${ICON.shield}</span><b>Respectée</b></div><span class="ba-d">${rej ? `${fi(rej)} variantes trop risquées écartées` : 'Épaule, coude, dos et genoux dans les repères'}</span></div>
+    </div>
+    <h3 class="g-h">${sens.length ? `Les ${sens.length} changements qui rapportent le plus` : 'Changements proposés'}${help('sensitivity')}</h3>
+    ${sens.length ? `<ol class="changes">${sens.map((x, i) => `<li class="${i === 0 ? 'top' : ''}"><i class="mono">${i + 1}</i><div><b>${sentence(x)}</b>${GKEY[x.key] ? help(GKEY[x.key]) : ''}<span class="ch-v mono">${fmtP(x.key, x.from)} → ${fmtP(x.key, x.to)}${x.unit ? ` ${esc(x.unit)}` : ''}</span></div><span class="ch-g mono">+${f(x.gainPct, 1)} %</span></li>`).join('')}</ol>` : '<p class="muted">Ton geste est déjà proche du meilleur compromis pour cet objectif.</p>'}
+    <p class="note g-note">Ce sont des simulations à partir de ta vidéo. Travaille un changement à la fois, refilme, et compare.</p>`;
 }
 
 const fmtP = (k, v) => !Number.isFinite(v) ? '—' : f(v, PL[k]?.[2] ?? (Math.abs(v) < 10 ? 2 : 0));

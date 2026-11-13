@@ -1,22 +1,32 @@
-// KYRON · application : démarrage, routage par hash, mode Simple / Avancé, profil joueur
-import { $, $$, store, on, emit, reduced, LEVEL_FR, esc } from './util.js';
+// KYRON · application : démarrage, comptes, routage par hash, navigation, mode Simple / Expert
+import { $, $$, on, emit, reduced, esc } from './util.js';
 import { S } from './state.js';
 import { loadCore, M } from './core.js';
+import { account } from './acct.js';
+import { applyProfile, setMode, profile, firstName } from './prefs.js';
+import './glossary.js';
 
-const ROUTES = ['seance', 'optimiseur', 'materiel', 'balle', 'progression', 'match', 'coach', 'eleves', 'apropos'];
-const views = {};          // modules de vue chargés
-const loaders = {
-  seance: () => import('./seance.js'),
-  optimiseur: () => import('./optim.js'),
-  materiel: () => import('./bench.js'),
-  balle: () => import('./bench.js'),
-  progression: () => import('./progression.js'),
-  coach: () => import('./coach.js'),
-  match: () => import('./match.js'),
-  eleves: () => import('./eleves.js'),
-  apropos: async () => ({}),
+// Écrans : vue affichée, module chargé, onglet actif, titre court et écran parent (bouton retour)
+const R = {
+  bienvenue: { view: 'bienvenue', load: () => import('./onboard.js'), bare: true, open: true },
+  accueil: { view: 'accueil', load: () => import('./home.js'), tab: 'accueil' },
+  analyser: { view: 'analyser', load: () => import('./analyse.js'), tab: 'analyser', title: 'Analyser' },
+  resultats: { view: 'resultats', load: () => import('./seance.js'), tab: 'accueil', title: 'Ton analyse', back: 'accueil', open: true },
+  geste: { view: 'geste', load: () => import('./optim.js'), tab: 'labo', title: 'Ton geste idéal', back: 'labo' },
+  progres: { view: 'progres', load: () => import('./progression.js'), tab: 'progres' },
+  profil: { view: 'profil', load: () => import('./profil.js'), tab: 'profil' },
+  labo: { view: 'labo', load: () => import('./home.js'), tab: 'labo', title: 'Labo', back: 'accueil' },
+  materiel: { view: 'materiel', load: () => import('./bench.js'), tab: 'labo', title: 'Matériel & cordage', back: 'labo' },
+  balle: { view: 'balle', load: () => import('./bench.js'), tab: 'labo', title: 'Balle', back: 'labo' },
+  match: { view: 'match', load: () => import('./match.js'), tab: 'labo', title: 'Match', back: 'labo' },
+  coach: { view: 'coach', load: () => import('./coach.js'), tab: 'labo', title: 'Coach IA', back: 'labo' },
+  eleves: { view: 'eleves', load: () => import('./eleves.js'), tab: 'labo', title: 'Élèves', back: 'labo' },
+  apropos: { view: 'apropos', load: async () => ({}), tab: 'profil', title: 'À propos des mesures', back: 'profil', open: true },
 };
-let route = null;
+// Anciennes adresses → nouvelles
+const ALIAS = { seance: 'resultats', optimiseur: 'geste', progression: 'progres', '': 'accueil' };
+const views = {};
+let route = null, ready = false;
 
 // ---------- Démarrage ----------
 const bootLog = $('#bootLog');
@@ -24,9 +34,9 @@ const bootT0 = performance.now();
 function logLine(msg, ok) {
   const d = document.createElement('div');
   const t = ((performance.now() - bootT0) / 1000).toFixed(3);
-  d.innerHTML = `<span style="color:var(--dim)">${t}</span><span class="m2">${esc(msg)}</span><span class="ld"></span><span class="${ok === false ? 'ko' : 'ok'}">${ok === false ? 'ABSENT' : 'OK'}</span>`;
+  d.innerHTML = `<span style="color:var(--dim)">${t}</span><span class="m2">${esc(msg)}</span><span class="ld"></span><span class="${ok === false ? 'ko' : 'ok'}">${ok === false ? 'absent' : 'ok'}</span>`;
   bootLog.appendChild(d);
-  while (bootLog.children.length > 8) bootLog.firstChild.remove();
+  while (bootLog.children.length > 7) bootLog.firstChild.remove();
 }
 function bootOut() {
   const b = $('#boot'); if (!b) return;
@@ -37,78 +47,109 @@ function bootOut() {
 $('#boot').addEventListener('click', bootOut);
 
 // ---------- Mode ----------
-function setMode(m) {
-  S.mode = m === 'adv' ? 'adv' : 'simple';
-  document.body.classList.toggle('adv', S.mode === 'adv');
-  $$('#modeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === S.mode)));
-  store.set('kyron-mode', S.mode);
-  emit('mode', S.mode);
-}
-$('#modeSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m); });
-
-// ---------- Profil ----------
-const pop = $('#profPop');
-function profSummary() {
-  const p = S.profile;
-  $('#profSum').textContent = `${(p.height / 100).toFixed(2).replace('.', ',')} m · ${p.hand === 'right' ? 'D' : 'G'} · ${LEVEL_FR[p.level] || ''}`;
-}
-function fillProfile() { const p = S.profile; $('#pfH').value = p.height; $('#pfW').value = p.weight; $('#pfHand').value = p.hand; $('#pfLvl').value = p.level; }
-function togglePop(open) {
-  const o = open ?? pop.hidden;
-  pop.hidden = !o; $('#profBtn').setAttribute('aria-expanded', String(o));
-  if (o) { fillProfile(); $('#pfH').focus(); }
-}
-$('#profBtn').addEventListener('click', (e) => { e.stopPropagation(); togglePop(); });
-document.addEventListener('click', (e) => { if (!pop.hidden && !pop.contains(e.target) && e.target !== $('#profBtn')) togglePop(false); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); togglePop(false); } });
-$('#profOk').addEventListener('click', () => {
-  const h = Math.max(120, Math.min(230, +$('#pfH').value || 180));
-  const w = Math.max(30, Math.min(160, +$('#pfW').value || 75));
-  const prev = { ...S.profile };
-  S.profile = { height: h, weight: w, hand: $('#pfHand').value, level: $('#pfLvl').value };
-  S.profileSet = true;
-  store.set('kyron-profile', S.profile);
-  profSummary(); togglePop(false);
-  emit('profile', { prev, next: S.profile });
-});
+$('#modeTog').addEventListener('click', () => setMode(S.mode === 'adv' ? 'simple' : 'adv'));
+on('mode', () => { if (route) paintChrome(route); });
 
 // ---------- Routage ----------
-async function show(r) {
-  if (!ROUTES.includes(r)) r = 'seance';
-  route = r;
-  $$('.info-btn').forEach((a) => { if (r === 'apropos') a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-  $$('.tabs a').forEach((a) => { if (a.dataset.r === r) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-  $$('main.view').forEach((v) => { v.hidden = v.dataset.view !== r; });
+function parse(h) {
+  const raw = (h || '').replace(/^#/, '');
+  const [name, ...rest] = raw.split('/');
+  const n = ALIAS[name] ?? name;
+  return { name: R[n] ? n : 'accueil', sub: rest.join('/') };
+}
+function guard(name) {
+  const u = account.user();
+  if (!u) return R[name].open ? name : 'bienvenue';
+  if (!profile?.onboarded || account.recovering) return 'bienvenue';
+  if (name === 'resultats' && !S.session) return 'accueil';
+  return name;
+}
+function paintChrome(name) {
+  const r = R[name];
+  document.body.classList.toggle('bare', !!r.bare);
+  document.body.dataset.route = name;
+  $$('#tabs a').forEach((a) => { if (a.dataset.r === r.tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  const signed = !!account.user();
+  const back = r.back && (signed || name !== 'resultats') ? r.back : (!signed && name !== 'bienvenue' ? 'bienvenue' : null);
+  $('#backBtn').hidden = !back;
+  if (back) $('#backBtn').href = `#${back}`;
+  document.body.classList.toggle('sub', !!back);
+  $('#topTitle').textContent = r.title || '';
+  document.body.classList.toggle('guest', !signed);
+  const n = firstName();
+  $('#avatar').textContent = n ? n[0].toUpperCase() : '·';
+}
+
+async function show(h) {
+  let { name, sub } = parse(h);
+  const g = guard(name);
+  if (g !== name) { name = g; sub = ''; history.replaceState(null, '', `#${name}`); }
+  else if ((location.hash || '').replace(/^#/, '').split('/')[0] !== name) history.replaceState(null, '', `#${name}${sub ? `/${sub}` : ''}`);
+  const prevRoute = route;
+  route = name;
+  paintChrome(name);
+  const viewKey = R[name].view;
+  $$('main.view').forEach((v) => {
+    const on = v.dataset.view === viewKey;
+    if (on && v.hidden) { v.hidden = false; v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter'); }
+    else if (!on) v.hidden = true;
+  });
+  if (prevRoute !== name) window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
   try {
-    const mod = views[r] || (views[r] = await loaders[r]());
-    if (route !== r) return;
-    await mod.show?.(r);
+    const mod = views[name] || (views[name] = await R[name].load());
+    if (route !== name) return;
+    await mod.show?.(name, sub);
   } catch (e) {
-    console.error(`[kyron] vue ${r}`, e);
+    console.error(`[kyron] vue ${name}`, e);
   }
-  emit('route', r);
+  emit('route', name);
 }
 export const currentRoute = () => route;
-window.addEventListener('hashchange', () => { show(location.hash.slice(1)); window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' }); });
+export const go = (h) => { if (location.hash === `#${h}`) show(h); else location.hash = h; };
+window.addEventListener('hashchange', () => { if (ready) show(location.hash); });
+on('nav', (h) => go(h));
+
+// Changement de compte (connexion, déconnexion) : on recharge le profil et on renvoie au bon écran
+const migrated = new Set();
+async function syncAccount() {
+  let p = null;
+  try { p = account.user() ? await account.getProfile() : null; } catch (e) { console.warn('[kyron] profil', e); }
+  applyProfile(p || (account.user() ? { name: account.user().name, mode: 'simple', onboarded: false } : null));
+  if (!account.user()) { S.session = null; }
+  else if (!migrated.has(account.user().id)) {
+    migrated.add(account.user().id);
+    // Ancien historique de cet appareil (avant les comptes) repris une seule fois dans le compte
+    account.migrateLegacy?.().then((r) => { if (r?.imported) emit('saved', {}); }).catch((e) => console.warn('[kyron] migration', e));
+  }
+  emit('account', account.user());
+}
 
 // ---------- Lancement ----------
 (async function start() {
-  setMode(S.mode);
-  profSummary();
-  logLine('Initialisation de l\'instrument', true);
+  setMode(S.mode, { persist: false });
+  logLine('Initialisation', true);
+  const accP = account.init().then(() => true).catch((e) => { console.warn('[kyron] comptes', e); return false; });
   await loadCore(({ label, ok }) => logLine(label, ok));
   if (!M.engine) logLine('Analyse impossible sans moteur', false);
-  // Les modules qui tournent en arrière-plan (séance + optimiseur) sont chargés dès le départ
-  const [seance, optim, prog] = await Promise.all([loaders.seance(), loaders.optimiseur(), loaders.progression()]);
-  views.seance = seance; views.optimiseur = optim; views.progression = prog;
+  logLine(account.backend === 'cloud' ? 'Comptes en ligne' : 'Comptes sur cet appareil', await accP);
+  await syncAccount();
+  // Modules qui tournent en arrière-plan (séance + optimiseur + progression)
+  const [seance, optim, prog] = await Promise.all([import('./seance.js'), import('./optim.js'), import('./progression.js')]);
+  views.resultats = seance; views.geste = optim; views.progres = prog;
   optim.init?.();
-  import('./report.js').then((m) => m.initReport()).catch((e) => console.warn('[kyron] export', e));
   await seance.init?.();
+  (await import('./results.js')).init();
+  import('./report.js').then((m) => m.initReport()).catch((e) => console.warn('[kyron] export', e));
   try { (await import('./adv.js')).init(); } catch (e) { console.warn('[kyron] panneaux avancés', e); }
   import('./prog2.js').then((m) => m.initTts()).catch((e) => console.warn('[kyron] audio', e));
-  logLine('Démo prête', true);
-  const r = location.hash.slice(1);
-  await show(ROUTES.includes(r) ? r : 'seance');
-  setTimeout(bootOut, reduced() ? 0 : 380);
+  logLine('Prêt', true);
+  account.onChange?.(async () => { await syncAccount(); if (ready) show(location.hash); });
+  // Rechargement sur une analyse : on rouvre la dernière séance ouverte dans cet onglet
+  try {
+    const id = sessionStorage.getItem('kyron-open');
+    if (id && account.user() && /^#(resultats|geste|seance|optimiseur)/.test(location.hash)) await seance.openSaved(await account.getSession(id));
+  } catch (e) { console.warn('[kyron] reprise de séance', e); }
+  ready = true;
+  await show(location.hash);
+  setTimeout(bootOut, reduced() ? 0 : 300);
 })();
-

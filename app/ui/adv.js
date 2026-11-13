@@ -19,7 +19,7 @@ export function init() {
   on('mode', () => requestAnimationFrame(renderAdv));
   on('opt', () => { if (S.opt.status === 'done') { ghost = null; updateGhostBtn(); if (S.mode === 'adv' && visible()) { try { renderRacket(); } catch (e) { console.warn('[kyron] raquette', e); } } } else updateGhostBtn(); });
   on('profile', () => requestAnimationFrame(renderAdv));
-  on('route', (r) => { if (r === 'seance') requestAnimationFrame(renderAdv); });
+  on('route', (r) => { if (r === 'resultats') requestAnimationFrame(renderAdv); });
   addEventListener('resize', () => { if (visible() && S.mode === 'adv') { dynBase = null; drawDyn(); renderRacketCanvases(); } });
   for (const id of ['#ghostBtn', '#ghostBtn3']) $(id)?.addEventListener('click', toggleGhost);
   $('#styleSeg')?.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; styleRef = b.dataset.k; renderStyle(); });

@@ -6,11 +6,14 @@ import { S } from './state.js';
 import { entryOf } from './progression.js';
 import { annotationsAll } from './adv.js';
 import { downloadsP } from './caps.js';
+import { account } from './acct.js';
 
 const KEY = 'kyron-eleves';
 let inited = false, mem = null, sel = null, selSess = null, cmpStroke = 'serve';
-const load = () => { const d = store.get(KEY, null); return d && Array.isArray(d.students) ? d : mem || { students: [] }; };
-const save = (d) => { if (!store.set(KEY, d)) mem = d; };
+// Rangé par compte (un coach = ses élèves), avec reprise des données locales d'avant les comptes
+const ukey = () => `${KEY}:${account.user()?.id || 'local'}`;
+const load = () => { const d = store.get(ukey(), null) || store.get(KEY, null); return d && Array.isArray(d.students) ? d : mem || { students: [] }; };
+const save = (d) => { if (!store.set(ukey(), d)) mem = d; };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const fmtD = (d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 

@@ -8,8 +8,9 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="./ui/kyron.css">
+<link rel="stylesheet" href="./ui/screens.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -29,81 +30,80 @@
   </div>
 </div>
 
-<header class="top">
+<header class="top" id="top">
   <div class="wrap">
-    <a class="brand" href="#seance" aria-label="KYRON, accueil"><svg aria-hidden="true" style="color:#fff"><use href="#m1"/></svg><b>KYRON</b><span>Lab · v1</span></a>
-    <nav class="tabs" aria-label="Sections">
-      <a href="#seance" data-r="seance"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="4.5" width="15" height="11"/><circle cx="10" cy="10" r="2.6"/></svg>Séance</a>
-      <a href="#optimiseur" data-r="optimiseur"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5" cy="14" r="1.2"/><circle cx="9" cy="9" r="1.2"/><circle cx="14" cy="11" r="1.2"/><circle cx="15" cy="5" r="1.2"/><path d="M3 17h14M3 3v14"/></svg>Optimiseur<i class="dot"></i></a>
-      <a href="#materiel" data-r="materiel"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="11.5" cy="7" rx="4.5" ry="5"/><path d="M8.6 10.8 3.5 17"/></svg>Matériel</a>
-      <a href="#balle" data-r="balle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 15c4-11 9-11 16 0" stroke-dasharray="2 2"/><circle cx="16" cy="14" r="1.8"/><path d="M2 17h16"/></svg>Balle</a>
-      <a href="#progression" data-r="progression"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15l4-4 3 3 6-7"/><path d="M3 17h14"/></svg>Progrès</a>
-      <a href="#match" data-r="match"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="2.5" width="12" height="15"/><path d="M4 10h12M7 2.5v15M13 2.5v15"/></svg>Match</a>
-      <a href="#coach" data-r="coach"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 4h14v9H9l-4 3v-3H3z"/></svg>Coach</a>
-      <a href="#eleves" data-r="eleves"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="2.6"/><circle cx="14" cy="8" r="2"/><path d="M2.5 16c.6-3 2.4-4.5 4.5-4.5s3.9 1.5 4.5 4.5M12 12.5c2.3-.6 4.6.6 5.5 3.5"/></svg>Élèves</a>
+    <a class="icon-btn back-btn" id="backBtn" href="#accueil" hidden aria-label="Retour"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <a class="brand" href="#accueil" aria-label="KYRON, accueil"><svg aria-hidden="true" style="color:#fff"><use href="#m1"/></svg><b>KYRON</b></a>
+    <span class="top-title" id="topTitle"></span>
+    <nav class="tabs" id="tabs" aria-label="Navigation principale">
+      <a href="#accueil" data-r="accueil" class="t-home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.5 12 4l8.5 6.5V20h-6v-5.5h-5V20h-6z"/></svg><span>Accueil</span></a>
+      <a href="#progres" data-r="progres" class="t-prog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16"/><path d="M5 15l4.5-4.5 3.5 3 6-6.5"/><circle cx="19" cy="7" r="1.3"/></svg><span>Progrès</span></a>
+      <a href="#analyser" data-r="analyser" class="t-cta"><i class="cta-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3.2"/></svg></i><span>Analyser</span></a>
+      <a href="#labo" data-r="labo" class="t-lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 3.5h5M10.5 3.5v5.2L5 18.3A1.5 1.5 0 0 0 6.3 20.5h11.4a1.5 1.5 0 0 0 1.3-2.2l-5.5-9.6V3.5"/><path d="M7.5 14.5h9"/></svg><span>Labo</span><i class="dot"></i></a>
+      <a href="#profil" data-r="profil" class="t-prof"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.5 20c1.2-3.8 4-5.6 7.5-5.6s6.3 1.8 7.5 5.6"/></svg><span>Profil</span></a>
     </nav>
     <div class="right">
-      <div class="seg" role="group" aria-label="Niveau de détail" id="modeSeg"><button data-m="simple" aria-pressed="true">Simple</button><button data-m="adv" aria-pressed="false">Avancé</button></div>
-      <a class="info-btn" href="#apropos" aria-label="À propos des mesures" title="À propos des mesures"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="10" cy="10" r="7.5"/><path d="M10 9v5M10 6.2v.1"/></svg></a>
-      <button class="prof-btn" id="profBtn" aria-expanded="false" aria-controls="profPop" aria-label="Profil joueur"><i></i><span id="profSum">Profil</span></button>
+      <button class="mode-tog" id="modeTog" type="button" role="switch" aria-checked="false" title="Mode expert : toutes les données, courbes et valeurs brutes"><span>Expert</span><i aria-hidden="true"></i></button>
+      <a class="avatar" href="#profil" id="avatar" aria-label="Ton profil">·</a>
     </div>
-  </div>
-  <div class="prof-pop" id="profPop" hidden>
-    <h3>Profil joueur</h3>
-    <p class="note">Ces valeurs alimentent tous les calculs : échelle métrique, main de frappe, dispersion des simulations.</p>
-    <div class="field"><label for="pfH">Taille (cm)</label><input type="number" id="pfH" min="120" max="230" step="1"></div>
-    <div class="field"><label for="pfW">Poids (kg)</label><input type="number" id="pfW" min="30" max="160" step="1"></div>
-    <div class="field"><label for="pfHand">Main de frappe</label><select id="pfHand"><option value="right">Droitier</option><option value="left">Gaucher</option></select></div>
-    <div class="field"><label for="pfLvl">Niveau</label><select id="pfLvl"><option value="loisir">Loisir</option><option value="club">Club</option><option value="competition">Compétition</option><option value="pro">Pro / espoir</option></select></div>
-    <button class="btn sm solid" id="profOk">Valider</button>
   </div>
 </header>
 
-<!-- ============ SÉANCE ============ -->
-<main class="view wrap" id="v-seance" data-view="seance" hidden>
-  <div class="vhead">
-    <div>
-      <div class="tag" id="srcTag">Séance · démo</div>
-      <h1 id="seanceTitle">Analyse de séance</h1>
-    </div>
-    <div class="acts">
-      <label class="btn solid" id="fileLbl">Importer une vidéo<input type="file" id="fileA" accept="video/*" aria-label="Importer une vidéo"></label>
-      <label class="btn" id="fileLbl2" title="Deux vues du même geste : synchronisation puis fusion 3D">2 caméras<input type="file" id="fileAB" accept="video/*" multiple aria-label="Importer deux vidéos"></label>
-      <button class="btn" id="demoBtn">Démo</button>
-      <button class="btn" id="cancelBtn" hidden>Annuler</button>
-      <button class="btn" id="exportBtn" hidden>Exporter le rapport</button>
-    </div>
-  </div>
-  <div class="status" id="status"><span class="msg" id="statusMsg">Chargement…</span><span class="bar" id="statusBar" hidden><i></i></span></div>
-  <div class="hscroll" id="strokes" role="group" aria-label="Frappes détectées" style="margin-bottom:14px"></div>
+<!-- ============ BIENVENUE (premier lancement, déconnecté) ============ -->
+<main class="view onb" id="v-bienvenue" data-view="bienvenue" hidden><div id="onbRoot"></div></main>
 
-  <div class="seance">
+<!-- ============ ACCUEIL ============ -->
+<main class="view wrap narrow" id="v-accueil" data-view="accueil" hidden><div id="homeRoot"></div></main>
+
+<!-- ============ ANALYSER ============ -->
+<main class="view wrap narrow" id="v-analyser" data-view="analyser" hidden><div id="anaRoot"></div></main>
+
+<!-- ============ LABO ============ -->
+<main class="view wrap narrow" id="v-labo" data-view="labo" hidden><div id="labRoot"></div></main>
+
+<!-- ============ PROFIL ============ -->
+<main class="view wrap narrow" id="v-profil" data-view="profil" hidden><div id="profRoot"></div></main>
+
+<!-- ============ SÉANCE ============ -->
+<main class="view wrap" id="v-seance" data-view="resultats" hidden>
+  <div class="ex-banner" id="rxDemo" hidden><b>Exemple</b><span>Ce n’est pas ton geste : ce sont des frappes de synthèse pour te montrer ce que KYRON mesure.</span><a class="btn sm solid" href="#analyser">Analyser mon geste</a></div>
+  <div class="page-head rx-head">
+    <div><div class="eyebrow" id="rxMeta">Analyse</div><h1 class="h1" id="rxTitle">Ton analyse</h1></div>
+    <div class="acts"><button class="btn sm" id="exportBtn" hidden>Exporter le rapport</button></div>
+  </div>
+  <div class="hscroll" id="strokes" role="group" aria-label="Frappes détectées" hidden></div>
+  <div class="rx">
+      <section class="panel o1 rx-video" aria-label="Lecture vidéo et squelette">
+      <div class="scene" id="scene">
+        <video id="vidA" playsinline muted preload="auto" hidden></video>
+        <canvas class="ov" id="ov" aria-label="Squelette superposé et traînée de raquette"></canvas>
+        <div class="pip" id="pip" hidden><span>CAM B</span><video id="vidB" playsinline muted preload="auto"></video></div>
+        <div class="sweep"></div>
+        <i class="aim a"></i><i class="aim b"></i><i class="aim c"></i><i class="aim d"></i>
+        <div class="hud tl"><div id="hudSrc">SRC <b>DÉMO</b></div><div id="hudT">T <b>0,000 s</b></div></div>
+        <div class="hud tr"><div>PHASE <b class="ph" id="hudPh">—</b></div><div id="hudFps"></div></div>
+        <div class="hud bl"><div id="hudA1"></div><div id="hudA2"></div></div>
+        <div class="hud br"><div id="hudA3"></div><div id="hudA4"></div></div>
+      </div>
+      <div class="transport">
+        <button class="ibtn" id="play" aria-label="Lecture"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg></button>
+        <button class="ibtn" id="prev" aria-label="Image précédente"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 2 4 7l5 5"/></svg></button>
+        <button class="ibtn" id="next" aria-label="Image suivante"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m5 2 5 5-5 5"/></svg></button>
+        <button class="ibtn wide" id="toImpact">Impact</button>
+        <button class="ibtn wide" id="annBtn" aria-pressed="false" title="Dessiner sur l'image et ajouter des notes">Annoter</button>
+        <button class="ibtn wide adv-only" id="ghostBtn" aria-pressed="false" disabled>Montrer le geste optimal</button>
+        <span class="sp"></span>
+        <div class="seg" role="group" aria-label="Vitesse de lecture" id="speedSeg"><button data-sp="0.1">×0,1</button><button data-sp="0.25" aria-pressed="true">×0,25</button><button data-sp="1">×1</button></div>
+      </div>
+      <div class="tlwrap"><canvas class="tl" id="tl" aria-label="Frise des phases, glisse pour te déplacer"></canvas></div>
+      <p class="ghost-info" id="ghostInfo" hidden></p>
+    </section>
+    <div class="rx-sum" id="rxSum"></div>
+  </div>
+  <div class="status" id="status"><span class="msg" id="statusMsg"></span><span class="bar" id="statusBar" hidden><i></i></span></div>
+  <button class="more-btn" id="rxMore" type="button" aria-expanded="false" aria-controls="rxFull"><span>Voir l’analyse complète</span><small>Chaîne cinétique, charges, raquette, courbes, 3D…</small></button>
+  <div class="seance" id="rxFull">
     <div class="stack">
-      <section class="panel o1" aria-label="Lecture vidéo et squelette">
-        <div class="scene" id="scene">
-          <video id="vidA" playsinline muted preload="auto" hidden></video>
-          <canvas class="ov" id="ov" aria-label="Squelette superposé et traînée de raquette"></canvas>
-          <div class="pip" id="pip" hidden><span>CAM B</span><video id="vidB" playsinline muted preload="auto"></video></div>
-          <div class="sweep"></div>
-          <i class="aim a"></i><i class="aim b"></i><i class="aim c"></i><i class="aim d"></i>
-          <div class="hud tl"><div id="hudSrc">SRC <b>DÉMO</b></div><div id="hudT">T <b>0,000 s</b></div></div>
-          <div class="hud tr"><div>PHASE <b class="ph" id="hudPh">—</b></div><div id="hudFps"></div></div>
-          <div class="hud bl"><div id="hudA1"></div><div id="hudA2"></div></div>
-          <div class="hud br"><div id="hudA3"></div><div id="hudA4"></div></div>
-        </div>
-        <div class="transport">
-          <button class="ibtn" id="play" aria-label="Lecture"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg></button>
-          <button class="ibtn" id="prev" aria-label="Image précédente"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 2 4 7l5 5"/></svg></button>
-          <button class="ibtn" id="next" aria-label="Image suivante"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m5 2 5 5-5 5"/></svg></button>
-          <button class="ibtn wide" id="toImpact">Impact</button>
-          <button class="ibtn wide" id="annBtn" aria-pressed="false" title="Dessiner sur l'image et ajouter des notes">Annoter</button>
-          <button class="ibtn wide adv-only" id="ghostBtn" aria-pressed="false" disabled>Montrer le geste optimal</button>
-          <span class="sp"></span>
-          <div class="seg" role="group" aria-label="Vitesse de lecture" id="speedSeg"><button data-sp="0.1">×0,1</button><button data-sp="0.25" aria-pressed="true">×0,25</button><button data-sp="1">×1</button></div>
-        </div>
-        <div class="tlwrap"><canvas class="tl" id="tl" aria-label="Frise des phases, glisse pour te déplacer"></canvas></div>
-        <p class="ghost-info" id="ghostInfo" hidden></p>
-      </section>
 
       <section class="panel simple-only o3">
         <div class="ph"><h2><i>01</i>Les 3 corrections prioritaires</h2><span class="lbl" id="fixLbl"></span></div>
@@ -188,24 +188,25 @@
 </main>
 
 <!-- ============ OPTIMISEUR ============ -->
-<main class="view wrap" id="v-optimiseur" data-view="optimiseur" hidden>
-  <div class="vhead">
-    <div>
-      <div class="tag"><span>Simulation massive · <span id="oSrc">—</span></span></div>
-      <h1>Des millions de gestes testés pour trouver le tien</h1>
-      <p>Le moteur fait varier ta flexion, ta torsion, ton extension, ton timing, l'angle de face et ton matériel, rejoue chaque balle dans l'air et ne garde que les combinaisons sûres pour ton corps.</p>
-    </div>
-    <div class="acts">
-      <div class="seg" role="group" aria-label="Objectif" id="goalSeg"><button data-g="balanced" aria-pressed="true">Équilibré</button><button data-g="speed">Vitesse</button><button data-g="spin">Effet</button><button data-g="safety">Sécurité</button></div>
-      <button class="btn" id="optRun">Relancer</button>
-      <button class="btn solid" id="optMax">Lancer en max · 50 M</button>
-    </div>
+<main class="view wrap" id="v-optimiseur" data-view="geste" hidden>
+  <div class="page-head">
+    <div><div class="eyebrow">Labo · simulateur physique <span class="mono" id="oSrc"></span></div><h1 class="h1 disp">Ton geste idéal</h1>
+    <p class="lead">KYRON cherche, à partir de ta vidéo, la version de ton geste qui va le plus vite et le plus loin sans abîmer ton corps.</p></div>
+  </div>
+  <ol class="how3" id="gHow">
+    <li class="rv"><i class="mono">1</i><div><b>On part de ton geste filmé</b><p>Tes angles, ton timing et ta vitesse mesurés sur ta vidéo.</p></div></li>
+    <li class="rv"><i class="mono">2</i><div><b>On le rejoue des millions de fois</b><p>Dans un simulateur physique (corps, raquette, balle, air), en faisant varier ta flexion, ta rotation, ton timing…</p></div></li>
+    <li class="rv"><i class="mono">3</i><div><b>On garde le meilleur, sans risque</b><p>Seules les variantes sûres pour tes articulations restent. On te montre les 2 ou 3 changements qui rapportent le plus.</p></div></li>
+  </ol>
+  <div id="gEmpty" class="empty-card" hidden></div>
+  <div class="goal-row"><span class="lbl">Ton objectif</span>
+    <div class="chips" role="group" aria-label="Objectif" id="goalSeg"><button data-g="balanced" aria-pressed="true">Équilibré</button><button data-g="speed">Plus de vitesse</button><button data-g="spin">Plus d’effet</button><button data-g="safety">Protéger mon corps</button></div>
   </div>
   <div class="opt-top" id="optTop">
     <div class="counter"><div class="dotbg"></div>
-      <div class="lbl" id="oState">En attente d'une analyse</div>
-      <div class="n" id="oTrials">0<small>essais</small></div>
-      <div class="sub"><span><b id="oRate">—</b> essais/s</span><span><b id="oCores">—</b> cœurs</span><span><b id="oTime">0,0 s</b></span><span>budget <b id="oBudget">—</b></span></div>
+      <div class="lbl" id="oState">En attente d'une analyse</div><div class="counter-cap">variantes de ton geste testées dans le simulateur</div>
+      <div class="n" id="oTrials">0<small>variantes</small></div>
+      <div class="sub"><span><b id="oRate">—</b> variantes / s</span><span><b id="oCores">—</b> processeurs</span><span><b id="oTime">0,0 s</b></span><span class="adv-inline">objectif <b id="oBudget">—</b></span></div>
       <div class="cores" id="oCoreGrid"></div>
       <div class="pbar"><i id="oBar"></i></div>
     </div>
@@ -215,6 +216,10 @@
       <p class="msg" id="oMsg">L'optimisation démarre toute seule dès qu'une analyse est terminée.</p>
     </div>
   </div>
+  <section id="gResult" class="g-result"></section>
+  <button class="more-btn" id="gMore" type="button" aria-expanded="false" aria-controls="gFull"><span>Voir le détail de la simulation</span><small>Nuage des variantes, sensibilité, réglages, matériel</small></button>
+  <div id="gFull">
+  <div class="g-acts"><button class="btn sm" id="optRun">Relancer</button><button class="btn sm" id="optMax">Recherche approfondie · 50 M</button></div>
   <div class="opt-main">
     <div class="stack">
       <section class="panel">
@@ -241,6 +246,7 @@
         <canvas class="small" id="optTrace" style="height:140px"></canvas>
       </section>
     </div>
+  </div>
   </div>
 </main>
 
@@ -306,13 +312,17 @@
 </main>
 
 <!-- ============ PROGRESSION ============ -->
-<main class="view wrap" id="v-progression" data-view="progression" hidden>
-  <div class="vhead">
-    <div><div class="tag">Historique</div><h1>Ta progression, séance après séance</h1></div>
+<main class="view wrap" id="v-progression" data-view="progres" hidden>
+  <div class="page-head">
+    <div><div class="eyebrow">Historique</div><h1 class="h1 disp">Progrès</h1></div>
     <div class="acts"><div class="seg" role="group" aria-label="Coup" id="pStroke"><button data-s="serve" aria-pressed="true">Service</button><button data-s="forehand">Coup droit</button><button data-s="backhand">Revers</button></div></div>
   </div>
   <div id="pBanner"></div>
+  <section class="sess-sec"><div class="sec-h"><h2>Tes séances</h2><span class="lbl" id="pSessN"></span></div><div class="sess-list" id="pSess"></div></section>
+  <div class="sec-h"><h2>Tes mesures</h2></div>
   <div class="metrics-grid" id="pCards"></div>
+  <button class="more-btn" id="pMore" type="button" aria-expanded="false" aria-controls="pFull"><span>Voir le détail</span><small>Toutes les mesures, charge d’entraînement, programme</small></button>
+  <div id="pFull">
   <div class="grid g2" style="margin-top:16px">
     <section class="panel"><div class="ph"><h2><i>02</i>Exercices</h2><span class="lbl">validés automatiquement par la mesure</span></div><div class="exlist" id="pEx"></div></section>
     <section class="panel"><div class="ph"><h2><i>03</i>Séances</h2><button class="btn sm" id="pClear" hidden>Effacer l'historique</button></div><div class="scroll"><table class="t" id="pTable"><thead><tr><th>Date</th><th>Source</th><th class="n">Frappes</th><th class="n">Score</th><th class="n">Raquette</th></tr></thead><tbody></tbody></table></div></section>
@@ -330,6 +340,7 @@
     <div class="pb tts"><p id="ttsTxt" class="tts-txt"></p>
       <div class="acts"><button class="btn sm solid" id="ttsSay">Écouter</button><button class="btn sm" id="ttsStop" hidden>Stop</button><button class="btn sm" id="ttsAuto" aria-pressed="false">Lire à chaque frappe</button></div>
       <p class="note" id="ttsMsg"></p><p class="note">En mode « Lire à chaque frappe », chaque frappe choisie en Séance est résumée à voix haute : idéal entre deux balles, téléphone posé au bord du court. Le texte reste affiché ici.</p></div></section>
+  </div>
 </main>
 
 <!-- ============ COACH ============ -->

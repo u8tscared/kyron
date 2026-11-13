@@ -1,11 +1,15 @@
 // KYRON · Progression : historique local (optionnel), courbes par métrique, objectifs, exercices validés par la mesure
 import { $, $$, f, fi, esc, fit, C, on, store, mean, STROKE_FR, analyzable } from './util.js';
+import { help } from './glossary.js';
 import { S } from './state.js';
 import { M } from './core.js';
 import { renderLoad, renderPlan, initTts, refreshCue } from './prog2.js';
+import { account } from './acct.js';
+import { sessions, sessCard, bindOpen } from './home.js';
+import { sheet, toast, reveal } from './kit.js';
 
 const KEY = 'kyron-history', GKEY = 'kyron-goals';
-let stroke = 'serve', inited = false, memHistory = null;
+let stroke = 'serve', inited = false, hist = [], pOpen = null;
 
 const DEFS = [
   { key: 'score', label: 'Score du geste', unit: '/100', dec: 0, dir: 'up', def: () => 80 },
@@ -20,11 +24,24 @@ const DEFS = [
   { key: 'inOrder', label: 'Chaîne en ordre', unit: '%', dec: 0, dir: 'up', scale: 100, def: () => 100 },
 ];
 // Seuil de validation d'un exercice, par clé de constat
+const GK = { racketKmh: 'racketKmh', ballKmh: 'ballKmh', inOrder: 'sequence' };
 const CHECK = { legs: 'kneeFlex', separation: 'separation', sequence: 'inOrder', extension: 'elbowImpact', contact: 'contactRatio', head: 'headDrift', turn: 'shoulderTurn' };
 
-// ---------- Historique ----------
-export function history() { const h = store.get(KEY, null); if (Array.isArray(h)) return h; return memHistory || []; }
-function save(h) { if (!store.set(KEY, h)) memHistory = h; }
+// ---------- Historique : séances enregistrées dans le compte (account.listSessions) ----------
+export function history() { return hist; }
+// Séances d'avant les comptes (reprises par migrateLegacy) : { strokes: {type: n}, metrics: {type: m} }
+function byTypeOf(sm) {
+  if (!sm) return null;
+  if (sm.byType && typeof sm.byType === 'object') return sm.byType;
+  if (sm.metrics && typeof sm.metrics === 'object') { const o = {}; for (const [t, m] of Object.entries(sm.metrics)) if (m && typeof m === 'object') o[t] = { n: sm.strokes?.[t] ?? 1, m, exercises: [] }; return Object.keys(o).length ? o : null; }
+  return null;
+}
+async function loadHist(force) {
+  const list = await sessions(force);
+  hist = list.map((x) => ({ ...x, byType: byTypeOf(x.summary) })).filter((x) => x.byType).map((x) => ({ id: x.id, date: x.createdAt, label: '', source: x.source === 'demo' ? 'exemple' : x.source, multi: x.source === '2cam' || !!x.summary.multi, count: x.summary.count || 0, byType: x.byType, fatigue: x.summary.fatigue ?? null }))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return list;
+}
 
 export function entryOf(sess) {
   const byType = {};
@@ -49,13 +66,6 @@ export function entryOf(sess) {
   return { id: sess.id, date: sess.date, label: sess.label || '', source: sess.source, multi: !!sess.multi, count: sess.strokes.length, byType: out, fatigue: sess.fatigue?.slopePct ?? null };
 }
 
-function record(sess) {
-  if (sess?.source !== 'video') return;
-  const h = history().filter((e) => e.id !== sess.id);
-  h.push(entryOf(sess));
-  h.sort((a, b) => a.date.localeCompare(b.date));
-  save(h.slice(-200));
-}
 
 // Exemple affiché tant que l'historique est vide (jamais enregistré)
 function example() {
@@ -80,7 +90,8 @@ function example() {
   return out;
 }
 
-const goals = () => store.get(GKEY, {});
+const gkey = () => `${GKEY}:${account.user()?.id || 'local'}`;
+const goals = () => store.get(gkey(), store.get(GKEY, {}));
 function goalFor(def, latest) {
   const g = goals()[stroke]?.[def.key];
   if (Number.isFinite(g)) return g;
@@ -89,16 +100,41 @@ function goalFor(def, latest) {
 }
 
 // ---------- Vue ----------
-export function show() {
+export async function show() {
   if (!inited) {
     inited = true;
     $('#pStroke').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; stroke = b.dataset.s; render(); });
-    $('#pClear').onclick = () => { if ($('#pClear').dataset.arm) { save([]); store.del(KEY); memHistory = null; delete $('#pClear').dataset.arm; render(); } else { $('#pClear').dataset.arm = '1'; $('#pClear').textContent = 'Confirmer : tout effacer'; setTimeout(() => { delete $('#pClear').dataset.arm; $('#pClear').textContent = "Effacer l'historique"; }, 3000); } };
     addEventListener('resize', () => { if (!$('#v-progression').hidden) render(); });
-
+    bindOpen($('#pSess'));
+    $('#pSess').addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (b) { e.stopPropagation(); askDelete(b.dataset.del); } }, true);
+    $('#pMore').addEventListener('click', () => { pOpen = !pIsOpen(); syncMore(); if (pIsOpen()) render(); });
+    on('mode', () => { syncMore(); if (!$('#v-progression').hidden) render(); });
+    syncMore();
   }
-  if (S.session?.strokes?.length) stroke = analyzable(S.session.strokes[S.strokeIdx]?.type || stroke);
+  const list = await loadHist();
+  // coup affiché : celui de la dernière séance
+  const lastT = hist[hist.length - 1] && Object.keys(hist[hist.length - 1].byType)[0];
+  if (lastT && !hist.some((e) => e.byType[stroke])) stroke = lastT;
+  else if (S.session?.strokes?.length && S.session.source !== 'demo') stroke = analyzable(S.session.strokes[S.strokeIdx]?.type || stroke);
+  renderSessions(list);
   render();
+}
+const pIsOpen = () => (pOpen == null ? S.mode === 'adv' : pOpen);
+function syncMore() {
+  const o = pIsOpen();
+  $('#pFull').classList.toggle('open', o); $('#v-progression').classList.toggle('all', o);
+  $('#pMore').setAttribute('aria-expanded', String(o));
+  $('#pMore span').textContent = o ? 'Masquer le détail' : 'Voir le détail';
+}
+function renderSessions(list) {
+  $('#pSessN').textContent = list.length ? `${list.length} séance${list.length > 1 ? 's' : ''}` : '';
+  $('#pSess').innerHTML = list.length ? list.slice(0, 30).map((x) => `<div class="sess-w">${sessCard(x)}<button type="button" class="sess-del" data-del="${esc(x.id)}" aria-label="Supprimer cette séance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></button></div>`).join('')
+    : '<div class="empty-home"><p>Aucune séance enregistrée pour l’instant. Chaque vidéo que tu analyses s’ajoute ici automatiquement.</p><div class="ec-acts"><a class="btn solid" href="#analyser">Analyser un geste</a></div></div>';
+  reveal($('#pSess'));
+}
+function askDelete(id) {
+  sheet.open({ title: 'Supprimer cette séance ?', html: '<p class="sh-lead">La séance, ses mesures et sa vidéo seront effacées de ton historique.</p><div class="ec-acts"><button type="button" class="btn danger-btn" id="sdGo">Supprimer</button><button type="button" class="btn" data-close>Annuler</button></div>',
+    onMount: (b) => { b.querySelector('#sdGo').onclick = async () => { try { await account.deleteSession(id); sheet.close(); toast('Séance supprimée.'); const list = await loadHist(true); renderSessions(list); render(); } catch (e) { toast(e?.message || 'Suppression impossible.', 'err'); } }; } });
 }
 
 function render() {
@@ -106,8 +142,8 @@ function render() {
   const real = history();
   const ex = !real.length;
   const H = ex ? example() : real;
-  $('#pBanner').innerHTML = ex ? `<div class="banner"><b>Exemple</b><span>Ces courbes sont un exemple. Dès ta première vidéo analysée, tes vraies séances s'enregistrent ici, sur cet appareil uniquement.</span><a class="btn sm" href="#seance">Analyser une vidéo</a></div>` : '';
-  $('#pClear').hidden = ex;
+  $('#pBanner').innerHTML = ex ? `<div class="ex-banner"><b>Exemple</b><span>Ces courbes sont un exemple. Dès ta première vidéo analysée, tes vraies mesures s'affichent ici.</span></div>` : '';
+  $('#pClear').hidden = true;
   const rows = H.filter((e) => e.byType[stroke]);
   const cards = DEFS.filter((d) => !d.only || d.only === stroke).map((d) => {
     const pts = rows.map((e) => { const v = e.byType[stroke].m[d.key]; return Number.isFinite(v) ? v * (d.scale || 1) : null; });
@@ -116,14 +152,14 @@ function render() {
     const last = vals[vals.length - 1], first = vals[0], goal = goalFor(d, last);
     const ok = goal == null ? null : d.dir === 'down' ? last <= goal : last >= goal;
     const delta = vals.length > 1 ? last - first : null;
-    return `<section class="panel mcard" data-k="${d.key}"><div class="ph"><h2>${esc(d.label)}</h2><span class="lbl">${ok == null ? '' : ok ? 'objectif atteint' : `<span class="acc">objectif ${f(goal, d.dec)} ${d.unit}</span>`}</span></div>
+    return `<section class="panel mcard" data-k="${d.key}"><div class="ph"><h2>${esc(d.label)}${help(GK[d.key] || d.key)}</h2><span class="lbl">${ok == null ? '' : ok ? 'objectif atteint' : `<span class="acc">objectif ${f(goal, d.dec)} ${d.unit}</span>`}</span></div>
       <div class="row"><b>${f(last, d.dec)}<small>${d.unit}</small></b><span class="lbl" style="margin:0">${delta == null ? '1 séance' : `${delta >= 0 ? '+' : '−'}${f(Math.abs(delta), d.dec)} depuis le début`}</span></div>
       <canvas data-pts='${JSON.stringify(pts)}' data-goal="${goal ?? ''}" data-dir="${d.dir}"></canvas>
       <div class="goal"><label for="g_${d.key}">Mon objectif (${d.unit})</label><input type="number" id="g_${d.key}" data-gk="${d.key}" step="${d.dec ? 0.01 : 1}" value="${goal != null ? +goal.toFixed(d.dec) : ''}"></div></section>`;
   }).join('');
   $('#pCards').innerHTML = cards || `<p class="empty">Aucune séance de ${STROKE_FR[stroke].toLowerCase()} enregistrée pour l'instant.</p>`;
   $$('#pCards canvas').forEach(spark);
-  $$('#pCards [data-gk]').forEach((i) => i.addEventListener('change', () => { const g = goals(); (g[stroke] ||= {})[i.dataset.gk] = +i.value; store.set(GKEY, g); render(); }));
+  $$('#pCards [data-gk]').forEach((i) => i.addEventListener('change', () => { const g = goals(); (g[stroke] ||= {})[i.dataset.gk] = +i.value; store.set(gkey(), g); render(); }));
   renderEx(rows);
   try { const L = renderLoad(real, ex); renderPlan(L, ex); refreshCue(); } catch (e) { console.warn('[kyron] progression v2', e); }
   $('#pTable tbody').innerHTML = [...H].reverse().slice(0, 30).map((e) => {
@@ -170,4 +206,4 @@ function renderEx(rows) {
   $('#pEx').innerHTML = items.join('') || '<p class="empty">Les exercices prescrits par tes analyses apparaîtront ici et se cocheront tout seuls quand la mesure passera le seuil.</p>';
 }
 
-on('session', (sess) => record(sess));
+on('saved', () => { if (!$('#v-progression').hidden) show(); });

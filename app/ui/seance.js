@@ -3,6 +3,7 @@ import { $, $$, f, fi, esc, fit, C, clamp, emit, on, STROKE_FR, analyzable, redu
 import { S, cur, curRes } from './state.js';
 import { M, has, analyzeSessionSafe, qualitySafe, buildDemoSession, classify, comSeries, fatigueOf } from './core.js';
 import { spinEstimate } from './physics-ui.js';
+import { help } from './glossary.js';
 
 export const P = { frames: [], res: null, i: 0, playing: false, speed: 0.25, clock: 0, yaw: -0.7, pitch: 0.25, com: [], trail: 0.3 };
 // Points d'accroche des panneaux avancés (fantôme, annotations, charges…) : dessin sur la vidéo, sur la 3D, rendu
@@ -14,7 +15,6 @@ const vA = $('#vidA'), vB = $('#vidB');
 // ====================== Initialisation ======================
 export async function init() {
   bind();
-  loadDemo();
   on('mode', () => requestAnimationFrame(() => { renderAll(); }));
   on('profile', ({ prev, next }) => {
     if (S.session?.source === 'video' && S.session.all && (prev.hand !== next.hand || prev.height !== next.height)) reanalyzeVideo('Profil mis à jour : analyse recalculée.');
@@ -26,13 +26,14 @@ export async function init() {
 export function show() { requestAnimationFrame(() => { drawTimeline(); drawCharts(); drawFrame(); renderRing(); }); }
 
 function status(msg, p) {
+  emit('status', { msg, p });
   $('#statusMsg').textContent = msg;
   $('#statusBar').hidden = p == null;
   if (p != null) $('#statusBar i').style.width = `${Math.round(clamp(p, 0, 1) * 100)}%`;
 }
 
 // ====================== Démo ======================
-function loadDemo() {
+export function loadDemo() {
   if (!M.engine) { status("Le moteur d'analyse n'a pas pu être chargé : recharge la page."); return; }
   stop();
   vA.hidden = true; vA.removeAttribute('src'); $('#pip').hidden = true;
@@ -40,15 +41,14 @@ function loadDemo() {
   if (!sess.strokes.length) { status('Démo indisponible pour le moment.'); return; }
   const q = qualitySafe(sess.strokes[0].frames, { width: 1920, height: 1080, duration: 2 });
   setSession({ ...sess, source: 'demo', quality: q, date: new Date().toISOString(), id: 'demo' });
-  status(`Démo : ${sess.strokes.length} frappes synthétiques d'un joueur droitier filmé à 120 i/s. Importe ta vidéo pour analyser ton propre geste.`);
+  status(`Exemple : ${sess.strokes.length} frappes synthétiques d'un joueur droitier filmé à 120 images/s. Ce n'est pas toi : analyse ta vidéo pour voir ton propre geste.`);
+  return S.session;
 }
 
 function setSession(sess, pick = 0) {
   S.session = sess;
   S.strokeIdx = clamp(pick, 0, sess.strokes.length - 1);
-  $('#srcTag').textContent = sess.source === 'demo' ? 'Séance · démo synthétique' : `Séance · ${sess.label || 'vidéo'}`;
-  $('#seanceTitle').textContent = sess.source === 'demo' ? 'Séance de démonstration' : `${sess.strokes.length} frappe${sess.strokes.length > 1 ? 's' : ''} analysée${sess.strokes.length > 1 ? 's' : ''}`;
-  $('#hudSrc').innerHTML = `SRC <b>${sess.source === 'demo' ? 'DÉMO' : sess.multi ? 'CAM A+B · FUSION' : 'CAM A'}</b>`;
+  $('#hudSrc').innerHTML = `SOURCE <b>${sess.source === 'demo' ? 'EXEMPLE' : sess.multi ? 'CAM A+B · FUSION' : 'CAM A'}</b>`;
   renderChips();
   pickStroke(S.strokeIdx, true);
   renderQuality(); renderFatigue();
@@ -57,7 +57,8 @@ function setSession(sess, pick = 0) {
 
 function renderChips() {
   const st = S.session.strokes;
-  $('#strokes').innerHTML = st.map((s, i) => `<button class="chip" data-i="${i}" aria-pressed="${i === S.strokeIdx}"><b>${String(i + 1).padStart(2, '0')} · ${esc(STROKE_FR[s.type] || s.type)}</b><span>${S.session.source === 'demo' ? '' : `${f(s.t, 1)} s · `}score ${s.res.score}${s.ball?.speedKmh ? ` · ${fi(s.ball.speedKmh)} km/h` : ''}</span></button>`).join('');
+  $('#strokes').hidden = st.length < 2;
+  $('#strokes').innerHTML = st.map((s, i) => `<button class="chip" data-i="${i}" aria-pressed="${i === S.strokeIdx}"><b>${i + 1}. ${esc(STROKE_FR[s.type] || s.type)}</b><span>Score <span class="mono">${s.res.score}</span>${s.ball?.speedKmh ? ` · <span class="mono">${fi(s.ball.speedKmh)}</span> km/h` : ''}</span></button>`).join('');
 }
 
 function pickStroke(i, silent) {
@@ -74,10 +75,6 @@ function pickStroke(i, silent) {
 
 // ====================== Import vidéo ======================
 function bind() {
-  $('#demoBtn').onclick = () => { if (!busy) loadDemo(); };
-  $('#fileA').addEventListener('change', (e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; if (fs.length) importVideos(fs.slice(0, 2)); });
-  $('#fileAB').addEventListener('change', (e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; if (fs.length) importVideos(fs.slice(0, 2)); });
-  $('#cancelBtn').onclick = () => { abortExt?.abort(); };
   $('#strokes').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (b) pickStroke(+b.dataset.i); });
   $('#speedSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -104,7 +101,7 @@ function bind() {
 let landmarker = null;
 async function getLandmarker() {
   if (landmarker) return landmarker;
-  status('Chargement du modèle de pose (≈ 9 Mo, une seule fois)…', 0.02);
+  status('Chargement du modèle de vision (≈ 9 Mo, une seule fois)…', 0.02);
   const vision = await import('../lib/vision_bundle.mjs');
   const base = new URL('../wasm', import.meta.url).href;
   const fileset = await vision.FilesetResolver.forVisionTasks(base);
@@ -164,6 +161,7 @@ async function extract(v, label, p0, p1, signal) {
     if (frames.length % 4 === 0) {
       const el = (performance.now() - t0) / 1000, pr = t / dur, eta = pr > 0.03 ? el / pr - el : null;
       status(`${label} · analyse image par image ${f(t, 1)} / ${f(dur, 1)} s · ${frames.length} poses${tracker ? ' · balle suivie' : ''}${eta != null ? ` · reste ≈ ${f(eta, 0)} s` : ''}`, p0 + (p1 - p0) * pr);
+      emit('analysis', { stage: 'pose', p: p0 + (p1 - p0) * pr, t, dur, poses: frames.length, eta, ball: !!tracker, racket: !!rkt, frame: frames[frames.length - 1] || null, label });
       drawLive(v, frames[frames.length - 1]);
     }
   }
@@ -177,14 +175,17 @@ async function extract(v, label, p0, p1, signal) {
   return { frames, rate, ball, racket, court: court || null, still, meta: { width: v.videoWidth, height: v.videoHeight, duration: v.duration }, truncated: v.duration > 20 };
 }
 
-async function importVideos(files) {
-  if (busy || !M.engine) return;
+// Analyse d'une ou deux vidéos. Renvoie la séance (ou lève une erreur en français). opts.stroke force le type de coup.
+export function cancelAnalysis() { abortExt?.abort(); }
+export const isBusy = () => busy;
+export async function importVideos(files, opts = {}) {
+  if (!M.engine) throw new Error("le moteur d'analyse n'a pas pu être chargé : recharge la page.");
+  if (busy) throw new Error('une analyse est déjà en cours.');
   busy = true; stop();
   abortExt = new AbortController();
   const signal = abortExt.signal;
-  $('#cancelBtn').hidden = false; $('#demoBtn').disabled = true;
-  $('#fileLbl').style.pointerEvents = 'none'; $('#fileLbl2').style.pointerEvents = 'none';
   $('#scene').classList.add('scanning');
+  let out = null, fail = null;
   extracting = true; fit(ov);
   $('#hudPh').textContent = 'Extraction'; $('#hudPh').className = 'ph';
   const multi = files.length === 2;
@@ -209,25 +210,81 @@ async function importVideos(files) {
     }
     status('Découpe des frappes, classification et mesures…', 0.97);
     await new Promise((r) => setTimeout(r, 0));
-    const sess = analyzeSessionSafe(all, { hand: S.profile.hand, height: S.profile.height / 100 });
+    emit('analysis', { stage: 'compute', p: 0.97 });
+    const sess = analyzeSessionSafe(all, { hand: S.profile.hand, height: S.profile.height / 100, forceStroke: opts.stroke || undefined });
     if (!sess.strokes.length) throw new Error("aucune frappe exploitable trouvée. Filme au moins un geste complet, de la préparation à l'accompagnement.");
     const quality = qualitySafe(all, A.meta);
-    const full = { ...sess, source: 'video', multi, all, offset, corr, quality, ballTrack: A.ball, racketTrack: A.racket, court: A.court, still: A.still, label: files.map((x) => x.name).join(' + '), date: new Date().toISOString(), id: `s${Date.now()}`, rate: A.rate };
+    const full = { ...sess, source: 'video', multi, all, offset, corr, quality, ballTrack: A.ball, racketTrack: A.racket, court: A.court, still: A.still, label: files.map((x) => x.name).join(' + '), date: new Date().toISOString(), id: `s${Date.now()}`, rate: A.rate, meta: A.meta, forceStroke: opts.stroke || null, files };
     attachBall(full);
     setSession(full, sess.summary?.bestIdx ?? 0);
     const nb = full.strokes.length;
-    status(`${A.frames.length} poses à ${A.rate} i/s${A.truncated ? ' (20 premières secondes)' : ''}${multi ? ` · caméras synchronisées (décalage ${f(offset * 1000, 0)} ms${corr != null ? `, corrélation ${f(corr, 2)}` : ''})` : ''} · ${nb} frappe${nb > 1 ? 's' : ''} détectée${nb > 1 ? 's' : ''}. L'optimiseur tourne en arrière-plan.`);
+    status(`${A.frames.length} poses à ${A.rate} images/s${A.truncated ? ' (20 premières secondes)' : ''}${multi ? ` · caméras synchronisées (décalage ${f(offset * 1000, 0)} ms${corr != null ? `, corrélation ${f(corr, 2)}` : ''})` : ''} · ${nb} frappe${nb > 1 ? 's' : ''} détectée${nb > 1 ? 's' : ''}.`);
+    out = full;
   } catch (err) {
+    fail = err;
     if (err.name === 'AbortError') status('Analyse annulée.');
     else { console.warn(err); status(`Analyse interrompue : ${err.message}`); }
     if (!S.session || S.session.source === 'demo') { vA.hidden = true; $('#pip').hidden = true; }
   } finally {
     busy = false; abortExt = null; extracting = false;
-    $('#cancelBtn').hidden = true; $('#demoBtn').disabled = false;
-    $('#fileLbl').style.pointerEvents = ''; $('#fileLbl2').style.pointerEvents = '';
     $('#scene').classList.remove('scanning');
     if (S.session) { pickStroke(S.strokeIdx, true); }
   }
+  if (fail) throw fail;
+  return out;
+}
+
+// ---------- Séances enregistrées ----------
+const r4 = (v) => (Number.isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
+const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1e3) / 1e3 : v);
+const r2 = (v) => (Number.isFinite(v) ? Math.round(v * 1e2) / 1e2 : v);
+// Longue vidéo : on ne garde que les images autour des frappes (± 0,25 s) pour rester sous la taille max d'une séance
+function framesToKeep(sess) {
+  const all = sess.all || [];
+  if (all.length <= 1400) return all;
+  const win = sess.strokes.map((s) => [s.frames[0].t - 0.25, s.frames[s.frames.length - 1].t + 0.25]);
+  return all.filter((fr) => win.some(([a, b]) => fr.t >= a && fr.t <= b));
+}
+// Données nécessaires pour rouvrir une séance à l'identique (poses + suivis), sans les images
+export function packSession(sess = S.session) {
+  if (!sess || sess.source !== 'video') return null;
+  return {
+    v: 1, rate: sess.rate, multi: !!sess.multi, offset: sess.offset || 0, corr: sess.corr ?? null, label: sess.label || '', meta: sess.meta || null, forceStroke: sess.forceStroke || null,
+    quality: sess.quality || null, court: sess.court || null, ballTrack: sess.ballTrack || null, racketTrack: sess.racketTrack || null,
+    frames: framesToKeep(sess).map((fr) => ({ t: r4(fr.t), img: fr.img.map((q) => [r4(q.x), r4(q.y), r2(q.v)]), world: fr.world.map((q) => [r3(q.x), r3(q.y), r3(q.z)]) })),
+  };
+}
+export async function openSaved({ id, result, videoUrl, createdAt }) {
+  if (!result?.frames?.length) throw new Error(result?.legacy ? 'séance d’avant les comptes : seules ses mesures ont été conservées (voir Progrès).' : 'cette séance ne contient pas les données du geste.');
+  stop();
+  const all = result.frames.map((fr) => ({ t: fr.t, img: fr.img.map(([x, y, v]) => ({ x, y, v })), world: fr.world.map(([x, y, z]) => ({ x, y, z })) }));
+  const sess = analyzeSessionSafe(all, { hand: S.profile.hand, height: S.profile.height / 100, forceStroke: result.forceStroke || undefined });
+  if (!sess.strokes.length) throw new Error('aucune frappe retrouvée dans cette séance.');
+  $('#pip').hidden = true;
+  if (videoUrl) {
+    vA.hidden = false;
+    try { await new Promise((res, rej) => { vA.onloadedmetadata = res; vA.onerror = rej; vA.src = videoUrl; }); $('#scene').classList.toggle('portrait', vA.videoHeight > vA.videoWidth); } catch (e) { vA.hidden = true; vA.removeAttribute('src'); }
+  } else { vA.hidden = true; vA.removeAttribute('src'); }
+  const full = { ...sess, source: 'video', multi: result.multi, all, offset: result.offset, corr: result.corr, quality: result.quality, ballTrack: result.ballTrack, racketTrack: result.racketTrack, court: result.court, still: null, label: result.label, date: createdAt || new Date().toISOString(), id: id || `s${Date.now()}`, savedId: id, rate: result.rate, meta: result.meta, forceStroke: result.forceStroke };
+  attachBall(full);
+  setSession(full, sess.summary?.bestIdx ?? 0);
+  status('Séance rouverte depuis ton historique.');
+  return full;
+}
+// Miniature JPEG : image de la vidéo à l'impact de la meilleure frappe, squelette par-dessus
+export async function thumbnail(sess = S.session) {
+  try {
+    if (!sess || vA.hidden || !vA.videoWidth) return null;
+    const s = sess.strokes[sess.summary?.bestIdx ?? 0] || sess.strokes[0];
+    const fr = s.frames[s.res.impact] || s.frames[0];
+    await new Promise((res) => { const to = setTimeout(res, 1500); vA.onseeked = () => { clearTimeout(to); res(); }; vA.currentTime = fr.t; });
+    const W = 360, H = Math.round(W * vA.videoHeight / vA.videoWidth);
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'); g.drawImage(vA, 0, 0, W, H);
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, 0, W, H);
+    skeleton(g, fr, (p) => [p.x * W, p.y * H], { x: 0, y: 0, w: W, h: H });
+    return await new Promise((res) => c.toBlob((b) => res(b), 'image/jpeg', 0.78));
+  } catch (e) { console.warn('[kyron] miniature', e); return null; }
 }
 
 function attachBall(sess) {
@@ -351,12 +408,12 @@ function renderKpis() {
   const ballKmh = meas ? s.ball.speedKmh : m.ballSpeedKmh;
   const oc = S.opt.status === 'done' && S.opt.forIdx === S.strokeIdx ? S.opt.result?.current : null;
   const spin = Number.isFinite(oc?.spinRpm) ? { rpm: Math.abs(oc.spinRpm), label: `${oc.spinRpm >= 0 ? 'lift' : 'slice'} · calé par l'optimiseur` } : spinEstimate(s.type, m.racketSpeed);
-  const k = (label, val, unit, d, badge, cls = '') => `<div class="kpi ${cls}">${badge || ''}<div class="lbl">${label}</div><b>${val}<small>${unit}</small></b><div class="d">${d || '&nbsp;'}</div></div>`;
+  const k = (label, val, unit, d, badge, cls = '', g = '') => `<div class="kpi ${cls}">${badge || ''}<div class="lbl">${label}${g ? help(g) : ''}</div><b>${val}<small>${unit}</small></b><div class="d">${d || '&nbsp;'}</div></div>`;
   const items = [
-    k('Vitesse de balle', fi(ballKmh), 'km/h', meas ? `suivie sur ${s.ballTrack?.length || 0} images${s.ball.launchDeg != null ? ` · départ ${f(s.ball.launchDeg, 1)}°` : ''}` : 'modèle : raquette × restitution', meas ? '<span class="badge meas">Mesurée</span>' : '<span class="badge">Estimée</span>', 'hero'),
-    k('Vitesse de raquette', fi(m.racketSpeed * 3.6), 'km/h', `poignet ${f(m.wristSpeed, 1)} m/s`, '<span class="badge">Estimée</span>'),
-    k('Effet', spin ? fi(spin.rpm) : '—', 'tr/min', spin ? spin.label : '', '<span class="badge">Estimé</span>'),
-    k('Chaîne cinétique', r.inOrder ? 'En ordre' : '<span class="acc">Rompue</span>', '', `${r.gaps.join(' · ')} ms`),
+    k('Vitesse de balle', fi(ballKmh), 'km/h', meas ? `suivie sur ${s.ballTrack?.length || 0} images${s.ball.launchDeg != null ? ` · départ ${f(s.ball.launchDeg, 1)}°` : ''}` : 'modèle : raquette × restitution', meas ? '<span class="badge meas">Mesurée</span>' : '<span class="badge">Estimée</span>', 'hero', 'ballKmh'),
+    k('Vitesse de raquette', fi(m.racketSpeed * 3.6), 'km/h', `poignet ${f(m.wristSpeed, 1)} m/s`, '<span class="badge">Estimée</span>', '', 'racketKmh'),
+    k('Effet', spin ? fi(spin.rpm) : '—', 'tr/min', spin ? spin.label : '', '<span class="badge">Estimé</span>', '', 'spin'),
+    k('Chaîne cinétique', r.inOrder ? 'En ordre' : '<span class="acc">Rompue</span>', '', `${r.gaps.join(' · ')} ms`, '', '', 'sequence'),
   ];
   if (S.mode === 'adv') {
     if (Number.isFinite(m.shoulderIRVel)) items.push(k('Rotation interne épaule', fi(m.shoulderIRVel), '°/s', 'pic avant impact'));
@@ -424,7 +481,7 @@ function renderTable() {
     ['tossApex', 'Sommet du lancer', `${f(m.tossApex, 2)} m`], ['tossDrop', 'Hauteur du lancer au-dessus du contact', `${f(m.tossDrop * 100, 0)} cm`], ['tossForward', 'Lancer devant le pied avant', `${f(m.tossForward * 100, 0)} cm`],
     ['height', 'Taille estimée', `${f(m.height, 2)} m`],
   ].filter(([k]) => !have.has(k) && Number.isFinite(m[k]));
-  $('#mtable tbody').innerHTML = r.items.map((it) => `<tr><td>${esc(it.label)}</td><td class="n">${fmtU(it.value, it.unit, it.key)}</td><td class="n" style="color:var(--mute)">${tgtU(it)}</td><td><div class="bar-s"><i class="${it.score < 60 ? 'att' : ''}" style="width:${it.score}%"></i></div></td></tr>`).join('')
+  $('#mtable tbody').innerHTML = r.items.map((it) => `<tr><td>${esc(it.label)}${help(it.key)}</td><td class="n">${fmtU(it.value, it.unit, it.key)}</td><td class="n" style="color:var(--mute)">${tgtU(it)}</td><td><div class="bar-s"><i class="${it.score < 60 ? 'att' : ''}" style="width:${it.score}%"></i></div></td></tr>`).join('')
     + extra.map(([, a, b]) => `<tr><td>${a}</td><td class="n">${b}</td><td class="n" style="color:var(--mute)">—</td><td></td></tr>`).join('');
   $('#tblLbl').textContent = `${r.n} images · ${fi(r.fps)} i/s${Number.isFinite(r.confidence) ? ` · confiance ${Math.round(r.confidence * 100)} %` : ''}`;
 }
