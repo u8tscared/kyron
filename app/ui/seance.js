@@ -4,7 +4,10 @@ import { S, cur, curRes } from './state.js';
 import { M, has, analyzeSessionSafe, qualitySafe, buildDemoSession, classify, comSeries, fatigueOf } from './core.js';
 import { spinEstimate } from './physics-ui.js';
 
-const P = { frames: [], res: null, i: 0, playing: false, speed: 0.25, clock: 0, yaw: -0.7, pitch: 0.25, com: [], trail: 0.3 };
+export const P = { frames: [], res: null, i: 0, playing: false, speed: 0.25, clock: 0, yaw: -0.7, pitch: 0.25, com: [], trail: 0.3 };
+// Points d'accroche des panneaux avancés (fantôme, annotations, charges…) : dessin sur la vidéo, sur la 3D, rendu
+export const hooks = { frame: [], d3: [], render: [] };
+export const api = { landmarker: () => getLandmarker(), detect: (lm, v, rate) => lm.detectForVideo(v, ++tsCounter * 1000 / rate), isBusy: () => busy, setCur: (i) => setCur(i), stop: () => stop(), frameAt: (t) => frameAt(t), redraw: () => drawFrame(), status: (m, p) => status(m, p), contentRect: (w, h) => contentRect(w, h) };
 let busy = false, abortExt = null, extracting = false;
 const vA = $('#vidA'), vB = $('#vidB');
 
@@ -126,7 +129,7 @@ async function extract(v, label, p0, p1, signal) {
   const dur = Math.min(v.duration || 0, 20);
   const rate = S.mode === 'adv' ? 120 : 60;
   const step = 1 / rate, frames = [];
-  let tracker = null, cv = null, cg = null;
+  let tracker = null, cv = null, cg = null, rkt = null;
   if (has('ball', 'createBallTracker') && v.videoWidth) {
     try {
       const sc = Math.min(1, 480 / v.videoWidth), w = Math.round(v.videoWidth * sc), h = Math.round(v.videoHeight * sc);
@@ -134,6 +137,14 @@ async function extract(v, label, p0, p1, signal) {
       tracker = M.ball.createBallTracker({ width: w, height: h });
     } catch (e) { console.warn('[kyron] suivi de balle désactivé', e); tracker = null; }
   }
+  if (has('racket', 'createRacketTracker') && v.videoWidth) {
+    try {
+      const sc = Math.min(1, 480 / v.videoWidth), w = Math.round(v.videoWidth * sc), h = Math.round(v.videoHeight * sc);
+      if (!cv) { cv = document.createElement('canvas'); cv.width = w; cv.height = h; cg = cv.getContext('2d', { willReadFrequently: true }); }
+      rkt = M.racket.createRacketTracker({ width: cv.width, height: cv.height, hand: S.profile.hand, heightM: S.profile.height / 100 });
+    } catch (e) { console.warn('[kyron] suivi de raquette désactivé', e); rkt = null; }
+  }
+  let court = null;
   const t0 = performance.now();
   for (let t = 0; t < dur; t += step) {
     if (signal.aborted) throw Object.assign(new Error('annulé'), { name: 'AbortError' });
@@ -142,7 +153,14 @@ async function extract(v, label, p0, p1, signal) {
     if (out.landmarks?.length && out.worldLandmarks?.length) {
       frames.push({ t, img: out.landmarks[0].map((q) => ({ x: q.x, y: q.y, v: q.visibility ?? 1 })), world: out.worldLandmarks[0].map((q) => ({ x: q.x, y: -q.y, z: -q.z })) });
     }
-    if (tracker) { try { cg.drawImage(v, 0, 0, cv.width, cv.height); tracker.push(t, cg.getImageData(0, 0, cv.width, cv.height)); } catch (e) { tracker = null; } }
+    if (tracker || rkt) {
+      let id = null;
+      try { cg.drawImage(v, 0, 0, cv.width, cv.height); id = cg.getImageData(0, 0, cv.width, cv.height); } catch (e) { tracker = null; rkt = null; }
+      if (id && tracker) { try { tracker.push(t, id); } catch (e) { tracker = null; } }
+      if (id && rkt) { try { rkt.push(t, id, frames[frames.length - 1]?.t === t ? frames[frames.length - 1] : null); } catch (e) { console.warn('[kyron] raquette', e); rkt = null; } }
+      // Calibration automatique du court sur la première image exploitable
+      if (id && court === null && has('court', 'calibrateCourt')) { try { court = M.court.calibrateCourt(id) || false; if (court && !(court.conf > 0.25)) court = false; } catch (e) { court = false; } }
+    }
     if (frames.length % 4 === 0) {
       const el = (performance.now() - t0) / 1000, pr = t / dur, eta = pr > 0.03 ? el / pr - el : null;
       status(`${label} · analyse image par image ${f(t, 1)} / ${f(dur, 1)} s · ${frames.length} poses${tracker ? ' · balle suivie' : ''}${eta != null ? ` · reste ≈ ${f(eta, 0)} s` : ''}`, p0 + (p1 - p0) * pr);
@@ -151,7 +169,12 @@ async function extract(v, label, p0, p1, signal) {
   }
   let ball = null;
   if (tracker) { try { ball = { ...tracker.result(), dims: { w: cv.width, h: cv.height } }; } catch (e) { ball = null; } }
-  return { frames, rate, ball, meta: { width: v.videoWidth, height: v.videoHeight, duration: v.duration }, truncated: v.duration > 20 };
+  let racket = null;
+  if (rkt) { try { racket = rkt.result(); } catch (e) { racket = null; } }
+  // Image de référence (réduite) gardée pour la calibration manuelle du court
+  let still = null;
+  try { if (cv) { const c2 = document.createElement('canvas'); c2.width = cv.width; c2.height = cv.height; c2.getContext('2d').drawImage(cv, 0, 0); still = c2; } } catch (e) { still = null; }
+  return { frames, rate, ball, racket, court: court || null, still, meta: { width: v.videoWidth, height: v.videoHeight, duration: v.duration }, truncated: v.duration > 20 };
 }
 
 async function importVideos(files) {
@@ -189,7 +212,7 @@ async function importVideos(files) {
     const sess = analyzeSessionSafe(all, { hand: S.profile.hand, height: S.profile.height / 100 });
     if (!sess.strokes.length) throw new Error("aucune frappe exploitable trouvée. Filme au moins un geste complet, de la préparation à l'accompagnement.");
     const quality = qualitySafe(all, A.meta);
-    const full = { ...sess, source: 'video', multi, all, offset, corr, quality, ballTrack: A.ball, label: files.map((x) => x.name).join(' + '), date: new Date().toISOString(), id: `s${Date.now()}`, rate: A.rate };
+    const full = { ...sess, source: 'video', multi, all, offset, corr, quality, ballTrack: A.ball, racketTrack: A.racket, court: A.court, still: A.still, label: files.map((x) => x.name).join(' + '), date: new Date().toISOString(), id: `s${Date.now()}`, rate: A.rate };
     attachBall(full);
     setSession(full, sess.summary?.bestIdx ?? 0);
     const nb = full.strokes.length;
@@ -292,6 +315,7 @@ function renderAll() {
   if (!P.res) return;
   renderVerdict(); renderFixes(); renderTable(); renderEx(); renderAsks();
   drawTimeline(); drawCharts(); drawFrame(); renderRing();
+  for (const fn of hooks.render) { try { fn(); } catch (e) { console.warn('[kyron] panneau', e); } }
 }
 
 function headline(sc) { return sc >= 85 ? 'Geste de haut niveau' : sc >= 72 ? 'Base solide, à affiner' : sc >= 58 ? 'De la vitesse en réserve' : 'Chaîne à reconstruire'; }
@@ -532,6 +556,7 @@ function drawFrame() {
     g.globalAlpha = 1;
   }
   skeleton(g, fr, Pt, cr);
+  for (const fn of hooks.frame) { try { fn(g, Pt, cr, fr); } catch (e) { console.warn('[kyron] calque', e); } }
   // HUD
   const r = P.res, i = P.i;
   $('#hudT').innerHTML = `T <b>${f(fr.t - P.frames[0].t, 3)} s</b> · IMG <b>${i + 1}/${P.frames.length}</b>`;
@@ -687,6 +712,7 @@ function draw3D() {
   }
   const axis = (i, j) => { const A = pr(fr.world[i]), B = pr(fr.world[j]); const dx = B[0] - A[0], dy = B[1] - A[1]; g.strokeStyle = C.s3; g.lineWidth = 1.2; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(A[0] - dx * 0.6, A[1] - dy * 0.6); g.lineTo(B[0] + dx * 0.6, B[1] + dy * 0.6); g.stroke(); g.setLineDash([]); };
   axis(23, 24); axis(11, 12);
+  for (const fn of hooks.d3) { try { fn(g, pr, fr, gy); } catch (e) { console.warn('[kyron] calque 3D', e); } }
   const com = P.com[P.i];
   if (com) {
     const c = pr(com), gnd = pr({ x: com.x, y: gy, z: com.z });

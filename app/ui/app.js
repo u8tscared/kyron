@@ -3,7 +3,7 @@ import { $, $$, store, on, emit, reduced, LEVEL_FR, esc } from './util.js';
 import { S } from './state.js';
 import { loadCore, M } from './core.js';
 
-const ROUTES = ['seance', 'optimiseur', 'materiel', 'balle', 'progression', 'coach'];
+const ROUTES = ['seance', 'optimiseur', 'materiel', 'balle', 'progression', 'match', 'coach', 'eleves', 'apropos'];
 const views = {};          // modules de vue chargés
 const loaders = {
   seance: () => import('./seance.js'),
@@ -12,6 +12,9 @@ const loaders = {
   balle: () => import('./bench.js'),
   progression: () => import('./progression.js'),
   coach: () => import('./coach.js'),
+  match: () => import('./match.js'),
+  eleves: () => import('./eleves.js'),
+  apropos: async () => ({}),
 };
 let route = null;
 
@@ -57,7 +60,7 @@ function togglePop(open) {
 }
 $('#profBtn').addEventListener('click', (e) => { e.stopPropagation(); togglePop(); });
 document.addEventListener('click', (e) => { if (!pop.hidden && !pop.contains(e.target) && e.target !== $('#profBtn')) togglePop(false); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) togglePop(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); togglePop(false); } });
 $('#profOk').addEventListener('click', () => {
   const h = Math.max(120, Math.min(230, +$('#pfH').value || 180));
   const w = Math.max(30, Math.min(160, +$('#pfW').value || 75));
@@ -73,6 +76,7 @@ $('#profOk').addEventListener('click', () => {
 async function show(r) {
   if (!ROUTES.includes(r)) r = 'seance';
   route = r;
+  $$('.info-btn').forEach((a) => { if (r === 'apropos') a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $$('.tabs a').forEach((a) => { if (a.dataset.r === r) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $$('main.view').forEach((v) => { v.hidden = v.dataset.view !== r; });
   try {
@@ -100,6 +104,8 @@ window.addEventListener('hashchange', () => { show(location.hash.slice(1)); wind
   optim.init?.();
   import('./report.js').then((m) => m.initReport()).catch((e) => console.warn('[kyron] export', e));
   await seance.init?.();
+  try { (await import('./adv.js')).init(); } catch (e) { console.warn('[kyron] panneaux avancés', e); }
+  import('./prog2.js').then((m) => m.initTts()).catch((e) => console.warn('[kyron] audio', e));
   logLine('Démo prête', true);
   const r = location.hash.slice(1);
   await show(ROUTES.includes(r) ? r : 'seance');

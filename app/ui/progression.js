@@ -2,6 +2,7 @@
 import { $, $$, f, fi, esc, fit, C, on, store, mean, STROKE_FR, analyzable } from './util.js';
 import { S } from './state.js';
 import { M } from './core.js';
+import { renderLoad, renderPlan, initTts, refreshCue } from './prog2.js';
 
 const KEY = 'kyron-history', GKEY = 'kyron-goals';
 let stroke = 'serve', inited = false, memHistory = null;
@@ -94,6 +95,7 @@ export function show() {
     $('#pStroke').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; stroke = b.dataset.s; render(); });
     $('#pClear').onclick = () => { if ($('#pClear').dataset.arm) { save([]); store.del(KEY); memHistory = null; delete $('#pClear').dataset.arm; render(); } else { $('#pClear').dataset.arm = '1'; $('#pClear').textContent = 'Confirmer : tout effacer'; setTimeout(() => { delete $('#pClear').dataset.arm; $('#pClear').textContent = "Effacer l'historique"; }, 3000); } };
     addEventListener('resize', () => { if (!$('#v-progression').hidden) render(); });
+
   }
   if (S.session?.strokes?.length) stroke = analyzable(S.session.strokes[S.strokeIdx]?.type || stroke);
   render();
@@ -123,6 +125,7 @@ function render() {
   $$('#pCards canvas').forEach(spark);
   $$('#pCards [data-gk]').forEach((i) => i.addEventListener('change', () => { const g = goals(); (g[stroke] ||= {})[i.dataset.gk] = +i.value; store.set(GKEY, g); render(); }));
   renderEx(rows);
+  try { const L = renderLoad(real, ex); renderPlan(L, ex); refreshCue(); } catch (e) { console.warn('[kyron] progression v2', e); }
   $('#pTable tbody').innerHTML = [...H].reverse().slice(0, 30).map((e) => {
     const t = e.byType[stroke] || Object.values(e.byType)[0];
     return `<tr><td>${new Date(e.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</td><td>${e.source === 'exemple' ? 'exemple' : e.multi ? '2 caméras' : 'vidéo'}</td><td class="n">${e.count}</td><td class="n">${fi(t?.m.score)}</td><td class="n">${fi(t?.m.racketKmh)} km/h</td></tr>`;

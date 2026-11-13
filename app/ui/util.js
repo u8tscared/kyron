@@ -55,7 +55,7 @@ export const C = {
   bg: '#000', ink: '#F4F4F2', ink2: '#C9C9C6', mute: '#8B8B8F', dim: '#4A4A4E', acc: '#FF4D1A',
   s1: '#F4F4F2', s2: '#B4B4B0', s3: '#7A7A7E', s4: '#4F4F53',
   rule: 'rgba(255,255,255,.12)', rule2: 'rgba(255,255,255,.22)',
-  mono: '"IBM Plex Mono", ui-monospace, Menlo, monospace', disp: '"Michroma", "Arial", sans-serif',
+  mono: '"IBM Plex Mono", ui-monospace, Menlo, monospace', disp: '"Michroma", "Arial", sans-serif', body: '"IBM Plex Sans", system-ui, sans-serif',
 };
 
 // Régression linéaire simple

@@ -38,10 +38,13 @@
       <a href="#materiel" data-r="materiel"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="11.5" cy="7" rx="4.5" ry="5"/><path d="M8.6 10.8 3.5 17"/></svg>Matériel</a>
       <a href="#balle" data-r="balle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 15c4-11 9-11 16 0" stroke-dasharray="2 2"/><circle cx="16" cy="14" r="1.8"/><path d="M2 17h16"/></svg>Balle</a>
       <a href="#progression" data-r="progression"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15l4-4 3 3 6-7"/><path d="M3 17h14"/></svg>Progrès</a>
+      <a href="#match" data-r="match"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="2.5" width="12" height="15"/><path d="M4 10h12M7 2.5v15M13 2.5v15"/></svg>Match</a>
       <a href="#coach" data-r="coach"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 4h14v9H9l-4 3v-3H3z"/></svg>Coach</a>
+      <a href="#eleves" data-r="eleves"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="2.6"/><circle cx="14" cy="8" r="2"/><path d="M2.5 16c.6-3 2.4-4.5 4.5-4.5s3.9 1.5 4.5 4.5M12 12.5c2.3-.6 4.6.6 5.5 3.5"/></svg>Élèves</a>
     </nav>
     <div class="right">
       <div class="seg" role="group" aria-label="Niveau de détail" id="modeSeg"><button data-m="simple" aria-pressed="true">Simple</button><button data-m="adv" aria-pressed="false">Avancé</button></div>
+      <a class="info-btn" href="#apropos" aria-label="À propos des mesures" title="À propos des mesures"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="10" cy="10" r="7.5"/><path d="M10 9v5M10 6.2v.1"/></svg></a>
       <button class="prof-btn" id="profBtn" aria-expanded="false" aria-controls="profPop" aria-label="Profil joueur"><i></i><span id="profSum">Profil</span></button>
     </div>
   </div>
@@ -93,10 +96,13 @@
           <button class="ibtn" id="prev" aria-label="Image précédente"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 2 4 7l5 5"/></svg></button>
           <button class="ibtn" id="next" aria-label="Image suivante"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m5 2 5 5-5 5"/></svg></button>
           <button class="ibtn wide" id="toImpact">Impact</button>
+          <button class="ibtn wide" id="annBtn" aria-pressed="false" title="Dessiner sur l'image et ajouter des notes">Annoter</button>
+          <button class="ibtn wide adv-only" id="ghostBtn" aria-pressed="false" disabled>Montrer le geste optimal</button>
           <span class="sp"></span>
           <div class="seg" role="group" aria-label="Vitesse de lecture" id="speedSeg"><button data-sp="0.1">×0,1</button><button data-sp="0.25" aria-pressed="true">×0,25</button><button data-sp="1">×1</button></div>
         </div>
         <div class="tlwrap"><canvas class="tl" id="tl" aria-label="Frise des phases, glisse pour te déplacer"></canvas></div>
+        <p class="ghost-info" id="ghostInfo" hidden></p>
       </section>
 
       <section class="panel simple-only o3">
@@ -120,7 +126,21 @@
       <section class="panel adv-only o7">
         <div class="ph"><h2><i>03</i>Squelette 3D · centre de masse</h2><span class="lbl">glisse pour orienter</span></div>
         <canvas class="v3d" id="v3d" aria-label="Squelette 3D orientable"></canvas>
-        <div class="pb" style="padding-top:10px"><div class="legend"><span><i class="dot" style="--c:var(--acc)"></i>Articulations du bras de frappe</span><span><i class="dot" style="--c:#fff"></i>Centre de masse</span><span><i class="dash" style="--c:var(--s3)"></i>Axes bassin / épaules</span><span><i style="--c:var(--s2)"></i>Trajectoire du poignet</span></div></div>
+        <div class="pb" style="padding-top:10px"><div style="margin-bottom:10px"><button class="btn sm" id="ghostBtn3" aria-pressed="false" disabled>Montrer le geste optimal</button></div><div class="legend"><span><i class="dot" style="--c:var(--acc)"></i>Articulations du bras de frappe</span><span><i class="dash" style="--c:#fff"></i>Fantôme (geste cible)</span><span><i class="dot" style="--c:#fff"></i>Centre de masse</span><span><i class="dash" style="--c:var(--s3)"></i>Axes bassin / épaules</span><span><i style="--c:var(--s2)"></i>Trajectoire du poignet</span></div></div>
+      </section>
+      <section class="panel adv-only o10">
+        <div class="ph"><h2><i>08</i>Forces au sol et charges articulaires</h2><span class="lbl">dynamique inverse · estimé</span></div>
+        <div class="kpis k3" id="dynK"></div>
+        <div class="pb"><canvas class="chart" id="dynCv" style="height:240px" aria-label="Couples articulaires et réaction du sol autour de l'impact"></canvas>
+          <div class="legend"><span><i style="--c:#fff"></i>Épaule · rotation interne</span><span><i style="--c:var(--s2)"></i>Coude · valgus</span><span><i class="dash" style="--c:var(--s3)"></i>Lombaires</span><span><i style="--c:var(--s4)"></i>Genou</span><span><i style="--c:#fff;height:1px"></i>Sol (bas, × poids)</span></div>
+          <div id="dynAl" style="margin-top:12px"></div><p class="note" id="dynNote" style="margin-top:10px"></p></div>
+      </section>
+      <section class="panel adv-only o12">
+        <div class="ph"><h2><i>10</i>Profil de style</h2><span class="lbl">archétypes synthétiques</span></div>
+        <div class="pb sens" id="styRank"></div>
+        <div class="ph" style="border-top:1px solid var(--rule)"><h2><i>11</i>Écarts phase par phase</h2><div class="seg" role="group" aria-label="Archétype de référence" id="styleSeg"></div></div>
+        <div class="scroll"><table class="t" id="styPh"><thead><tr><th>Phase</th><th class="n">Toi</th><th class="n">Référence</th><th class="n">Écart</th></tr></thead><tbody></tbody></table></div>
+        <p class="note pb" id="styDtw" style="padding-top:10px"></p>
       </section>
     </div>
 
@@ -144,6 +164,24 @@
       <section class="panel o9">
         <div class="ph"><h2><i>07</i>Fatigue sur la séance</h2><span class="lbl" id="fatLbl"></span></div>
         <div class="pb fatigue" id="fatigue"></div>
+      </section>
+      <section class="panel adv-only o11">
+        <div class="ph"><h2><i>09</i>Raquette</h2><span class="lbl">face, trajectoire, impact</span></div>
+        <div class="kpis" id="rkA"></div>
+        <div class="grid g2 rkviz"><canvas id="rkFace" aria-label="Tamis vu de face avec le point d'impact"></canvas><canvas id="rkPath" aria-label="Trajectoire de la tête de raquette autour de l'impact"></canvas></div>
+        <p class="note pb" id="rkSrc" style="padding-top:0"></p>
+      </section>
+      <section class="panel adv-only o13">
+        <div class="ph"><h2><i>12</i>Jeu de jambes et asymétries</h2></div>
+        <div class="kpis" id="fwK"></div>
+        <p class="note pb" id="fwSrc" style="padding-bottom:6px"></p>
+        <div class="scroll"><table class="t" id="fwAsym"><thead><tr><th>Asymétrie</th><th class="n">Valeurs</th><th class="n">Écart</th></tr></thead><tbody></tbody></table></div>
+      </section>
+      <section class="panel o14">
+        <div class="ph"><h2><i>·</i>Annotations du coach</h2><span class="lbl" id="annLbl"></span></div>
+        <div class="pb"><div class="ann-tools"><button class="btn sm" id="annClear" type="button">Effacer les dessins ici</button></div>
+          <form class="ann-form" id="annForm"><input type="text" id="annTxt" maxlength="400" placeholder="Note à cet instant…" aria-label="Note à cet instant"><button class="btn sm solid" type="submit">Ajouter</button></form>
+          <div class="ann-list" id="annList"></div></div>
       </section>
     </div>
   </div>
@@ -225,6 +263,13 @@
       <section class="panel"><div class="ph"><h2><i>05</i>Comparer les raquettes avec ton geste</h2><span class="lbl">même swing, même cordage</span></div>
         <div class="scroll"><table class="t" id="cmp"><thead><tr><th>Raquette</th><th class="n">Masse</th><th class="n">SW</th><th class="n">Balle</th><th class="n">Effet</th><th class="n">Confort</th><th class="n">Balles bonnes</th></tr></thead><tbody></tbody></table></div>
         <p class="note pb" style="padding-top:10px">Balles bonnes : 250 frappes simulées par raquette avec la dispersion de ton niveau, en visant l'angle de départ le plus sûr.</p></section>
+      <section class="panel"><div class="ph"><h2><i>06</i>Vibrations et confort du bras</h2><span class="lbl">premier mode de flexion</span></div>
+        <div class="kpis k3" id="vibK"></div>
+        <div class="pb"><canvas class="small" id="vibCv" style="height:170px" aria-label="Déformée de vibration de la raquette, nœuds et point d'impact"></canvas><p class="note" id="vibNote" style="margin-top:8px"></p></div></section>
+      <section class="panel"><div class="ph"><h2><i>07</i>Simulateur d'hybride</h2><button class="btn sm" id="hySwap" type="button">Inverser montants / travers</button></div>
+        <div class="pb"><div class="hyctl" id="hyCtl"></div></div>
+        <div class="scroll"><table class="t" id="hyT"><thead><tr><th>Cordage</th><th class="n">Balle km/h</th><th class="n">Effet tr/min</th><th class="n">Confort</th><th class="n">Raideur kN/m</th><th class="n">Tension 30 j</th></tr></thead><tbody></tbody></table></div>
+        <div class="pb" style="padding-top:10px"><p class="note" id="hyNote"></p><p class="note" id="hyRec" style="margin-top:6px"></p></div></section>
     </div>
   </div>
 </main>
@@ -246,6 +291,16 @@
       <section class="panel"><div class="ph"><h2><i>02</i>Marge de sécurité · Monte-Carlo</h2><button class="btn sm" id="mcBtn">Lancer la simulation</button></div>
         <div class="pb"><div class="mc-out"><div><div class="lbl">Balles bonnes</div><div class="big" id="mcRate">—<small>%</small></div><div class="bar3" id="mcBar"></div><div class="legend"><span><i style="--c:#fff"></i>Bonnes</span><span><i style="--c:var(--acc)"></i>Filet</span><span><i style="--c:var(--s4)"></i>Long</span></div></div><canvas class="small" id="mcCv" aria-label="Taux de réussite selon la vitesse de balle"></canvas></div>
         <p class="note" id="mcNote" style="margin-top:12px"></p></div></section>
+      <section class="panel"><div class="ph"><h2><i>03</i>Effet et carte des rebonds</h2><span class="lbl">ellipse = 95 % des balles</span></div>
+        <div class="kpis k4" id="bmK"></div>
+        <div class="pb"><canvas class="court" id="bmCv" style="height:340px" aria-label="Carte des rebonds vue de dessus avec ellipse de dispersion"></canvas><p class="note" id="bmSrc" style="margin-top:8px"></p></div></section>
+      <section class="panel"><div class="ph"><h2><i>04</i>Calibration du court</h2><div class="acts" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" id="calAuto">Détection automatique</button><button class="btn sm" id="calManual">4 points à la main</button></div></div>
+        <div class="pb"><canvas class="court cal" id="calCv" aria-label="Image de référence et lignes du court projetées"></canvas><p class="note" id="calMsg" style="margin-top:8px"></p></div>
+        <div class="kpis k4" id="calK" style="border-top:1px solid var(--rule)"></div></section>
+      <section class="panel"><div class="ph"><h2><i>05</i>Rebond selon la surface</h2><span class="lbl">même frappe, quatre courts</span></div>
+        <div class="scroll"><table class="t" id="sfT"><thead><tr><th>Surface</th><th class="n">Sortie</th><th class="n">Angle</th><th class="n">Hauteur max.</th><th class="n">Au fond</th><th>Contact</th></tr></thead><tbody></tbody></table></div>
+        <div class="pb"><canvas class="small" id="sfCv" style="height:170px" aria-label="Trajectoire après le rebond selon la surface"></canvas><div class="legend" id="sfLeg"></div>
+        <p class="note" style="margin-top:8px">Rebond : restitution verticale et frottement jusqu'au roulement. « Au fond » : hauteur de la balle quand elle passe la ligne de fond adverse, là où l'adversaire la reprend. Courbes après rebond sans traînée de l'air.</p></div></section>
     </div>
   </div>
 </main>
@@ -262,6 +317,19 @@
     <section class="panel"><div class="ph"><h2><i>02</i>Exercices</h2><span class="lbl">validés automatiquement par la mesure</span></div><div class="exlist" id="pEx"></div></section>
     <section class="panel"><div class="ph"><h2><i>03</i>Séances</h2><button class="btn sm" id="pClear" hidden>Effacer l'historique</button></div><div class="scroll"><table class="t" id="pTable"><thead><tr><th>Date</th><th>Source</th><th class="n">Frappes</th><th class="n">Score</th><th class="n">Raquette</th></tr></thead><tbody></tbody></table></div></section>
   </div>
+  <div class="grid g2" style="margin-top:16px">
+    <section class="panel"><div class="ph"><h2><i>04</i>Charge et prévention</h2><span class="lbl">aiguë 7 j · chronique 28 j</span></div>
+      <div class="kpis k4" id="ldK"></div>
+      <div class="pb"><canvas class="small" id="ldCv" aria-label="Charge quotidienne, aiguë et chronique"></canvas>
+        <div class="legend"><span><i style="--c:rgba(255,255,255,.3);height:8px"></i>Charge du jour</span><span><i style="--c:#fff"></i>Aiguë</span><span><i class="dash" style="--c:var(--s3)"></i>Chronique</span></div>
+        <div id="ldAl" style="margin-top:12px"></div><p class="note" id="ldNote" style="margin-top:10px"></p></div></section>
+    <section class="panel"><div class="ph"><h2><i>05</i>Programme de la semaine</h2><span class="lbl">généré à partir de tes écarts</span></div>
+      <div class="plan" id="plan"></div><p class="note pb" id="planNote" style="padding-top:10px"></p></section>
+  </div>
+  <section class="panel" id="ttsBox" hidden style="margin-top:16px"><div class="ph"><h2><i>06</i>Retour audio entre deux frappes</h2><span class="lbl">lu à voix haute</span></div>
+    <div class="pb tts"><p id="ttsTxt" class="tts-txt"></p>
+      <div class="acts"><button class="btn sm solid" id="ttsSay">Écouter</button><button class="btn sm" id="ttsStop" hidden>Stop</button><button class="btn sm" id="ttsAuto" aria-pressed="false">Lire à chaque frappe</button></div>
+      <p class="note" id="ttsMsg"></p><p class="note">En mode « Lire à chaque frappe », chaque frappe choisie en Séance est résumée à voix haute : idéal entre deux balles, téléphone posé au bord du court. Le texte reste affiché ici.</p></div></section>
 </main>
 
 <!-- ============ COACH ============ -->
@@ -280,6 +348,80 @@
   </div>
 </main>
 
+
+<!-- ============ MATCH ============ -->
+<main class="view wrap" id="v-match" data-view="match" hidden>
+  <div class="vhead">
+    <div><div class="tag" id="mTag">Match</div><h1>Ton match, point par point</h1><p>Caméra fixe derrière toi, court entier dans le champ : KYRON repère tes frappes, les rebonds, tes positions, puis découpe les points.</p></div>
+    <div class="acts">
+      <label class="btn solid" id="mFileLbl">Importer un match<input type="file" id="mFile" accept="video/*" aria-label="Importer une vidéo de match"></label>
+      <button class="btn" id="mDemo">Démo</button><button class="btn" id="mCancel" hidden>Annuler</button>
+    </div>
+  </div>
+  <div class="status"><span class="msg" id="mMsg">—</span><span class="bar" id="mBar" hidden><i></i></span></div>
+  <video id="mVid" playsinline muted preload="auto" hidden></video>
+  <section class="panel"><div class="kpis k4" id="mK"></div></section>
+  <div class="grid g2" style="margin-top:16px">
+    <section class="panel"><div class="ph"><h2><i>01</i>Carte de chaleur</h2><span class="lbl" id="mHeatLbl"></span></div>
+      <div class="pb"><canvas class="court" id="mHeat" style="height:380px" aria-label="Carte de chaleur de tes positions sur ta moitié de court"></canvas></div></section>
+    <div class="stack">
+      <section class="panel"><div class="ph"><h2><i>02</i>Enchaînements</h2><span class="lbl">tes 2 ou 3 coups dans un même point</span></div>
+        <div class="scroll"><table class="t" id="mSeq"><thead><tr><th>Séquence</th><th class="n">Fois</th><th class="n">Points gagnés</th></tr></thead><tbody></tbody></table></div></section>
+      <section class="panel"><div class="ph"><h2><i>03</i>Profil de l'adversaire</h2></div><div class="pb" id="mOpp"></div></section>
+    </div>
+  </div>
+  <section class="panel" style="margin-top:16px"><div class="ph"><h2><i>04</i>Points</h2><span class="lbl">40 premiers</span></div>
+    <div class="scroll" style="max-height:360px;overflow-y:auto"><table class="t" id="mPts"><thead><tr><th class="n">#</th><th>Service</th><th>Tes frappes</th><th class="n">Issue</th></tr></thead><tbody></tbody></table></div>
+    <p class="note pb" id="mNotes" style="padding-top:10px"></p></section>
+</main>
+
+<!-- ============ ÉLÈVES ============ -->
+<main class="view wrap" id="v-eleves" data-view="eleves" hidden>
+  <div class="vhead">
+    <div><div class="tag">Espace coach</div><h1>Tes élèves, leurs séances, tes corrections</h1><p>Tout reste sur cet appareil. Tu valides chaque correction avant de l'envoyer à l'élève.</p></div>
+  </div>
+  <div class="eleves">
+    <section class="panel"><div class="ph"><h2><i>01</i>Élèves</h2></div>
+      <div class="st-list" id="eList"></div>
+      <form class="pb add-st" id="eAdd"><input type="text" id="eName" maxlength="60" placeholder="Prénom de l'élève" aria-label="Prénom de l'élève"><select id="eLvl" aria-label="Niveau"><option value="loisir">Loisir</option><option value="club" selected>Club</option><option value="competition">Compétition</option><option value="pro">Pro / espoir</option></select><button class="btn sm solid" type="submit">Ajouter</button></form>
+    </section>
+    <section class="panel" id="eMain"></section>
+  </div>
+  <section class="panel" style="margin-top:16px"><div class="ph"><h2><i>05</i>Comparer les élèves</h2><div class="seg" role="group" aria-label="Coup" id="eCmpSeg"><button data-s="serve" aria-pressed="true">Service</button><button data-s="forehand">Coup droit</button><button data-s="backhand">Revers</button></div></div>
+    <div class="scroll"><table class="t" id="eCmp"><thead></thead><tbody></tbody></table></div><p class="note pb" style="padding-top:10px">Dernière séance de chaque élève. <span class="acc">●</span> meilleure valeur du groupe.</p></section>
+</main>
+
+<!-- ============ À PROPOS DES MESURES ============ -->
+<main class="view wrap" id="v-apropos" data-view="apropos" hidden>
+  <div class="vhead">
+    <div><div class="tag">Transparence</div><h1>À propos des mesures</h1><p>Ce que KYRON mesure vraiment, ce qu'il estime avec un modèle, ce qui n'est qu'une démonstration, et ce qui reste à construire.</p></div>
+  </div>
+  <div class="legend-st"><span class="src mesure">Mesuré</span> lu dans ta vidéo, image par image · <span class="src estimation">Estimé</span> calculé par un modèle physique à partir des mesures · <span class="src demo">Démo</span> données synthétiques ou exemple · <span class="src avenir">À venir</span> pas encore construit</div>
+  <section class="panel"><div class="scroll"><table class="t about" id="aboutT"><thead><tr><th>Fonctionnalité</th><th>Statut</th><th>Comment, et avec quelle précision</th></tr></thead><tbody>
+    <tr><td>Squelette 2D et 3D, angles articulaires, phases, chaîne cinétique</td><td><span class="src mesure">Mesuré</span></td><td>MediaPipe Pose, 33 points par image, dans ton navigateur. Précision de l'ordre de 5 à 10° sur les angles, moins bonne quand un membre est caché ou flou.</td></tr>
+    <tr><td>Vitesses segmentaires, vitesse de raquette</td><td><span class="src estimation">Estimé</span></td><td>Dérivées des positions du squelette, mises à l'échelle par ta taille. La raquette est prolongée depuis l'avant-bras quand son cadre n'est pas détecté.</td></tr>
+    <tr><td>Suivi de raquette : angle de face, trajectoire, point d'impact sur le tamis</td><td><span class="src mesure">Mesuré</span> / <span class="src estimation">Estimé</span></td><td>Ellipse du cadre détectée dans l'image autour du poignet. Vitesse mesurée dans le plan de l'image (borne basse). Point d'impact seulement si la balle est visible à l'impact. Sinon, modèle avant-bras.</td></tr>
+    <tr><td>Vitesse et effet de la balle</td><td><span class="src mesure">Mesuré</span> / <span class="src estimation">Estimé</span></td><td>Vitesse : balle suivie après l'impact (borne basse si elle part vers la caméra). Effet : ajustement du modèle de vol sur la trajectoire suivie, sinon estimé par le modèle d'impact.</td></tr>
+    <tr><td>Carte des rebonds, ellipse de dispersion</td><td><span class="src mesure">Mesuré</span> / <span class="src demo">Simulé</span></td><td>Mesurée quand la balle rebondit dans le champ et que le court est calibré. Sinon, tes frappes sont rejouées dans le simulateur avec la dispersion de ton niveau, et c'est indiqué.</td></tr>
+    <tr><td>Calibration du court</td><td><span class="src mesure">Mesuré</span></td><td>Détection automatique des lignes blanches et du modèle ITF, ou 4 coins cliqués à la main. Nécessaire pour les positions au sol en mètres.</td></tr>
+    <tr><td>Forces au sol, charges de l'épaule, du coude, des lombaires et des genoux</td><td><span class="src estimation">Estimé</span></td><td>Dynamique inverse sur 14 segments à partir d'une seule caméra : ± 30 à 50 % sur les pics, confiance plafonnée à 85 %. Repères de la littérature, pas des limites médicales.</td></tr>
+    <tr><td>Jeu de jambes, pas d'allègement, asymétries</td><td><span class="src mesure">Mesuré</span> / <span class="src estimation">Estimé</span></td><td>Appuis et envols des pieds, déplacements du centre de masse. Sans court calibré, seul le déplacement latéral est connu.</td></tr>
+    <tr><td>Profil de style, écarts phase par phase</td><td><span class="src estimation">Estimé</span></td><td>Comparaison à des archétypes synthétiques construits à partir de plages publiées. Aucun joueur réel n'est nommé ni imité.</td></tr>
+    <tr><td>Geste optimal (fantôme), optimiseur</td><td><span class="src estimation">Simulé</span></td><td>Des millions de variantes simulées (impact, vol, dispersion, contraintes du corps). Le fantôme rejoue ton geste sur le timing et les angles cibles : ce n'est pas une vidéo.</td></tr>
+    <tr><td>Banc matériel, vibrations, hybrides, rebond par surface</td><td><span class="src estimation">Estimé</span></td><td>Modèles physiques publiés (impact, poutre vibrante, rebond avec frottement). À lire en comparaison, pas comme des valeurs de laboratoire.</td></tr>
+    <tr><td>Charge d'entraînement, programme de la semaine</td><td><span class="src estimation">Estimé</span></td><td>Charge par frappe tirée de la vitesse de raquette, ratio aiguë / chronique pour piloter le volume. Le programme est un repère, pas une prescription.</td></tr>
+    <tr><td>Analyse de match</td><td><span class="src estimation">Estimé</span></td><td>Points découpés par les pauses, issue estimée par le dernier rebond vu. Les frappes de l'adversaire sont déduites de ses rebonds. La démo est un match synthétique.</td></tr>
+    <tr><td>Coach IA, retour audio</td><td><span class="src mesure">Sur tes mesures</span></td><td>Le coach ne répond qu'avec les chiffres de ta séance. Le retour audio lit le même résumé que celui affiché. Disponibles seulement dans claude.ai.</td></tr>
+    <tr><td>Séance de démonstration</td><td><span class="src demo">Démo</span></td><td>Squelettes synthétiques d'un joueur droitier à 120 images/s, sans vidéo. Toutes les données « exemple » sont signalées.</td></tr>
+  </tbody></table></div></section>
+  <section class="panel" style="margin-top:16px"><div class="ph"><h2><i>·</i>À venir, et ce qu'il faut pour le construire</h2></div><div class="scroll"><table class="t about"><tbody>
+    <tr><td>Application iPhone native</td><td><span class="src avenir">À venir</span></td><td>Capture 240 images/s et analyse sur l'appareil (Core ML). Il faut une app Swift, la conversion du modèle de pose et une publication sur l'App Store.</td></tr>
+    <tr><td>Comptes et synchronisation en ligne</td><td><span class="src avenir">À venir</span></td><td>Aujourd'hui tout reste dans ce navigateur. Il faut un serveur, une authentification, un stockage chiffré et un cadre RGPD (consentement, effacement, mineurs).</td></tr>
+    <tr><td>Base de joueurs professionnels réels</td><td><span class="src avenir">À venir</span></td><td>Il faut des vidéos sous licence, l'accord des joueurs et une capture de référence validée. En attendant : archétypes synthétiques, clairement signalés.</td></tr>
+    <tr><td>Avatar 3D réaliste</td><td><span class="src avenir">À venir</span></td><td>Il faut un modèle de corps sous licence (type SMPL, licence commerciale) et son ajustement au squelette. Aujourd'hui : squelette filaire.</td></tr>
+    <tr><td>Capteurs (raquette, montre, semelles)</td><td><span class="src avenir">À venir</span></td><td>Il faut le matériel, l'appairage Bluetooth (application native) et la fusion caméra + capteurs. Ils donneraient l'impact et les forces au sol réellement mesurés.</td></tr>
+  </tbody></table></div></section>
+</main>
 <script type="module" src="./ui/app.js"></script>
 </body>
 </html>

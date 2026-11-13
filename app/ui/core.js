@@ -1,7 +1,7 @@
 // KYRON · accès aux moteurs (app/core/*) avec repli propre quand un module ou un export manque encore.
 import { analyzable, linreg, mean } from './util.js';
 
-export const M = { engine: null, session: null, ball: null, sync: null, demo: null, physics: null, optimizer: null };
+export const M = { engine: null, session: null, ball: null, sync: null, demo: null, physics: null, optimizer: null, dynamics: null, load: null, style: null, racket: null, court: null, footwork: null, ballstats: null, match: null };
 export const STATUS = [];
 
 const LIST = [
@@ -12,7 +12,28 @@ const LIST = [
   ['ball', '../core/ball.js', 'Suivi de balle'],
   ['sync', '../core/sync.js', 'Synchronisation multi-caméras'],
   ['optimizer', '../core/optimizer.js', 'Optimiseur multi-cœurs'],
+  ['dynamics', '../core/dynamics.js', 'Dynamique inverse, charges articulaires'],
+  ['load', '../core/load.js', 'Charge cumulée'],
+  ['style', '../core/style.js', 'Profil de style, geste cible'],
+  ['racket', '../core/racket.js', 'Suivi de raquette'],
+  ['court', '../core/court.js', 'Calibration du court'],
+  ['footwork', '../core/footwork.js', 'Jeu de jambes'],
+  ['ballstats', '../core/ballstats.js', 'Statistiques de balle'],
+  ['match', '../core/match.js', 'Analyse de match'],
 ];
+// Modules arrivés après le démarrage (écrits pendant que l'app tourne) : nouvelle tentative à la demande
+export async function retryCore(k) {
+  if (M[k]) return M[k];
+  const it = LIST.find((x) => x[0] === k); if (!it) return null;
+  try { M[k] = await import(`${it[1]}?r=${Date.now()}`); } catch (e) { M[k] = null; }
+  return M[k];
+}
+// Premier export existant parmi plusieurs noms possibles (contrats encore en cours d'écriture)
+export function pick(mod, names) {
+  const m = M[mod]; if (!m) return null;
+  for (const n of names) if (typeof m[n] === 'function') return m[n];
+  return null;
+}
 
 export async function loadCore(onEach) {
   await Promise.all(LIST.map(async ([k, p, label]) => {

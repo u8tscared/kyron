@@ -3,6 +3,7 @@ import { $, $$, f, fi, esc, fit, C, clamp, on, emit, DISP, STROKE_FR, analyzable
 import { S, cur } from './state.js';
 import { M } from './core.js';
 import { SWING_DEF, swingFromAnalysis, racketOf, tensionNow } from './physics-ui.js';
+import { renderMat2, renderBal2 } from './bench2.js';
 
 let built = false, raf = 0, mcWorker = null, mcTimer = 0, mcKey = '';
 const P = () => M.physics;
@@ -148,6 +149,7 @@ function render() {
   const v = view(); if (!v || !P() || !S.swing) return;
   const c = read();
   if (v === 'materiel') renderMateriel(c); else renderBalle(c);
+  try { if (v === 'materiel') renderMat2(c); else renderBal2(c); } catch (e) { console.warn('[kyron] banc v2', e); }
 }
 
 function renderMateriel(c) {

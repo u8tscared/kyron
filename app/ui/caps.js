@@ -1,4 +1,4 @@
-// KYRON · capacités de claude.ai (coach IA, téléchargements) : absentes hors de claude.ai, jamais bloquantes
+// KYRON · capacités de claude.ai (coach IA, téléchargements, lecture à voix haute) : absentes hors de claude.ai, jamais bloquantes
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
 function use(name) {
   try {
@@ -9,3 +9,4 @@ function use(name) {
 }
 export const sampleP = use('sample');
 export const downloadsP = use('downloads');
+export const ttsP = use('tts');
