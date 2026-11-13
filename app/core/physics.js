@@ -1,7 +1,16 @@
-// KYRON · physique raquette, cordage, impact, trajectoire (v0)
+// KYRON · physique raquette, cordage, impact, trajectoire (v1)
 // Unités SI sauf mention : masses en kg, longueurs en m (cm pour les specs raquette), angles en degrés en entrée.
+//
+// Ce module est un modèle physique SIMPLIFIÉ, calibré sur des ordres de grandeur publiés :
+//   - Cross & Lindsey (Technical Tennis, 2005), Brody, Cross & Lindsey (The Physics and Technology of Tennis, 2002) :
+//     COR apparent e_A ≈ 0,4 au centre du tamis, temps de contact ≈ 4–5 ms, roulement de la balle sur le cordage ;
+//   - Štěpánek (1988), Goodwill et al. (2004) : coefficients de traînée et de portance (Magnus) d'une balle de tennis ;
+//   - Cross & Bower (2006) : la vitesse de swing baisse quand le swingweight augmente (exposant ≈ 0,27).
+// Limites assumées : impact 2D dans le plan de frappe (pas d'effet latéral), raquette libre (la main est négligée
+// pendant les ~4 ms du contact, cf. Cross), cordage = ressort linéaire, balle = ressort linéaire en série,
+// effet de la balle entrante ignoré, trajectoire 2D (pas de vent latéral ni de slice latéral).
 
-export const BALL = { m: 0.0577, r: 0.0335, I: 0.55 }; // I = k·m·r² (coque creuse ≈ 0,55)
+export const BALL = { m: 0.0577, r: 0.0335, I: 0.55, kBall: 75000 }; // I = facteur k de I = k·m·r² (coque creuse ≈ 0,55) ; kBall en N/m
 export const COURT = { net: 11.885, netH: 0.914, service: 18.285, base: 23.77, halfW: 4.115 };
 const DEG = Math.PI / 180;
 const G = 9.81;
@@ -29,36 +38,39 @@ export const LEAD_SPOTS = {
 // Raquette physique : masse (g), équilibre (cm), SW (kg·cm² autour d'un axe à 10 cm), TW (kg·cm²)
 export function customize(r, leads = {}) {
   let m = r.mass / 1000, bal = r.balance, sw = r.sw, tw = r.tw;
-  for (const [k, g] of Object.entries(leads)) {
-    if (!g) continue;
+  for (const [k, g] of Object.entries(leads || {})) {
+    if (!g || !LEAD_SPOTS[k]) continue;
     const s = LEAD_SPOTS[k], mp = g / 1000;
     bal = (m * bal + mp * s.d) / (m + mp);
     m += mp;
-    sw += mp * (s.d - 10) ** 2;
-    tw += mp * s.lat ** 2;
+    sw += mp * (s.d - 10) ** 2;   // théorème de Huygens : plomb ponctuel à (d − 10) cm de l'axe du swingweight
+    tw += mp * s.lat ** 2;        // idem autour de l'axe longitudinal (plombs latéraux uniquement)
   }
-  const Icm = (sw - m * (bal - 10) ** 2) / 1e4; // kg·m² autour du centre de masse
-  // Point de percussion (centre de percussion) depuis l'axe à 10 cm : q = I_axe / (m·r_cm)
+  const Icm = (sw - m * (bal - 10) ** 2) / 1e4; // kg·m² autour du centre de masse (axe transversal)
+  // Centre de percussion depuis le bas du manche, pour un pivot à 10 cm : q = I_axe / (m·r_cm)
   const cop = 10 + (sw / 1e4) / (m * ((bal - 10) / 100)) * 100;
-  return { mass: m * 1000, balance: bal, sw, tw, Icm, cop, ra: r.ra, head: r.head, pattern: r.pattern, name: r.name };
+  return { mass: m * 1000, balance: bal, sw, tw, Icm, cop, ra: r.ra, head: r.head, pattern: r.pattern, name: r.name, id: r.id };
 }
 
-// Masse effective au point d'impact (distance au bas du manche en cm), pour un choc dans l'axe
+// Masse effective au point d'impact (distance au bas du manche en cm), pour un choc normal au tamis.
+// Raquette libre : 1/Me = 1/m + x²/I_cm (translation + rotation autour du centre de masse).
 export function effectiveMass(rk, impactCm = 54) {
   const m = rk.mass / 1000, x = (impactCm - rk.balance) / 100;
   return 1 / (1 / m + (x * x) / rk.Icm);
 }
 
 // ---------- Cordage ----------
+// k : raideur relative ; e : correction de COR ; snap : surcroît d'effet par glissement/retour des cordes (« snapback »,
+// mesuré surtout sur les polyesters lisses) ; mu : frottement balle/cordage ; tauH, keep, wearPerH : relaxation et usure.
 export const STRINGS = {
-  poly: { label: 'Polyester', k: 1.15, e: -0.012, snap: 1.14, comfort: 0.55, tauH: 8, keep: 0.8, wearPerH: 0.006 },
-  copoly_soft: { label: 'Co-poly souple', k: 1.05, e: -0.006, snap: 1.12, comfort: 0.68, tauH: 10, keep: 0.82, wearPerH: 0.005 },
-  multi: { label: 'Multifilament', k: 0.9, e: 0.01, snap: 0.98, comfort: 0.9, tauH: 24, keep: 0.86, wearPerH: 0.003 },
-  gut: { label: 'Boyau naturel', k: 0.92, e: 0.016, snap: 1.06, comfort: 1, tauH: 48, keep: 0.92, wearPerH: 0.002 },
-  hybrid: { label: 'Hybride poly / boyau', k: 1.03, e: 0.004, snap: 1.1, comfort: 0.8, tauH: 14, keep: 0.86, wearPerH: 0.004 },
+  poly: { label: 'Polyester', k: 1.15, e: -0.012, snap: 1.14, mu: 0.45, comfort: 0.55, tauH: 8, keep: 0.8, wearPerH: 0.006 },
+  copoly_soft: { label: 'Co-poly souple', k: 1.05, e: -0.006, snap: 1.12, mu: 0.45, comfort: 0.68, tauH: 10, keep: 0.82, wearPerH: 0.005 },
+  multi: { label: 'Multifilament', k: 0.9, e: 0.01, snap: 0.98, mu: 0.4, comfort: 0.9, tauH: 24, keep: 0.86, wearPerH: 0.003 },
+  gut: { label: 'Boyau naturel', k: 0.92, e: 0.016, snap: 1.06, mu: 0.42, comfort: 1, tauH: 48, keep: 0.92, wearPerH: 0.002 },
+  hybrid: { label: 'Hybride poly / boyau', k: 1.03, e: 0.004, snap: 1.1, mu: 0.44, comfort: 0.8, tauH: 14, keep: 0.86, wearPerH: 0.004 },
 };
 
-// Raideur du lit de cordage (N/m)
+// Raideur du lit de cordage (N/m) — ordre de grandeur 25–40 kN/m pour un tamis de 98–100 po² (Brody, Cross).
 export function bedStiffness(rk, s, tensionKg, gauge = 1.25) {
   const S = STRINGS[s];
   const dens = rk.pattern === '18x20' ? 1.08 : 1;
@@ -74,35 +86,95 @@ export function tensionAfter(s, T0, days, hours) {
 }
 
 // ---------- Impact raquette / balle ----------
+// Partie indépendante de la cinématique (calculée une fois par configuration matérielle) : masse effective,
+// COR de référence balle/cordage, raideurs, facteurs d'effet. Séparée pour que l'optimiseur l'appelle une seule fois.
+export function impactSetup({ rk, string, tension, gauge = 1.25, impactCm = 54, offCenter = 0 }) {
+  const S = STRINGS[string];
+  let Me = effectiveMass(rk, impactCm);
+  // Impact décentré latéralement : la raquette tourne aussi autour de son axe longitudinal (twistweight).
+  if (offCenter) { const tw = rk.tw / 1e4, d = offCenter / 100; Me = 1 / (1 / Me + (d * d) / tw); }
+  const k = bedStiffness(rk, string, tension, gauge);
+  // COR « vrai » balle / cordage sur cadre rigide, à ~20 m/s de vitesse relative : ≈ 0,88–0,90 (Cross).
+  // Basses tensions → effet trampoline (la balle se déforme moins, ses pertes internes baissent).
+  const eStr = 0.9 + 0.003 * (24 - tension) + S.e - (gauge - 1.25) * 0.05;
+  // Pertes vibratoires du cadre : faibles au nœud de vibration (~centre du tamis), fortes vers la pointe / le cœur,
+  // d'autant plus que le cadre est souple (RA faible). Décentrage latéral : pertes supplémentaires.
+  const node = 53;
+  const frameLoss = 0.0008 * Math.max(0, 75 - rk.ra) * (1 + ((impactCm - node) / 6) ** 2) + Math.abs(offCenter) * 0.006;
+  const e0 = eStr - frameLoss;
+  const spinF = S.snap * (rk.pattern === '18x20' ? 0.93 : 1) * (1 + (1.25 - gauge) * 0.6);
+  const mred = (BALL.m * Me) / (BALL.m + Me);
+  const kEff = (k * BALL.kBall) / (k + BALL.kBall); // cordage et balle : deux ressorts en série
+  const comfort = clamp(S.comfort * (1 - Math.max(0, rk.ra - 62) * 0.012) * (1 - Math.abs(offCenter) * 0.04) * (1 - Math.max(0, tension - 21) * 0.025), 0, 1);
+  return { Me, k, kEff, mred, e0, mu: S.mu, spinF, comfort };
+}
+
+// COR vrai en fonction de la vitesse relative normale : la balle perd plus d'énergie quand elle s'écrase davantage
+// (pente choisie pour retrouver ~190–220 km/h au service avec 45 m/s de vitesse de tête).
+export function corAt(e0, vRelN) {
+  return clamp(e0 - 0.0022 * (vRelN - 20), 0.55, 0.93);
+}
+
+// Résolution de l'impact pour une cinématique donnée (V en m/s, alpha et phi en degrés, u vitesse balle entrante m/s).
+// Géométrie : x vers le filet, y vers le haut ; normale du tamis n = (cos φ, sin φ) ; tangente t = (−sin φ, cos φ).
+// La balle entrante arrive horizontalement vers le joueur : (−u, 0).
+// Version sans allocation (boucle chaude de l'optimiseur) : out = Float64Array(9)
+//   [vitesse, angle de départ °, effet tr/min, e_A, vn, vt, vitesse relative normale, e, glissement 0/1]
+export function impactSolveInto(c, V, alpha, phi, u, out) {
+  const p = phi * DEG, g = (alpha - phi) * DEG;
+  const cp = Math.cos(p), sp = Math.sin(p);
+  const Vn = V * Math.cos(g), Vt = V * Math.sin(g);
+  const un = u * cp;            // vitesse normale entrante (vers la raquette)
+  const ut = u * sp;            // composante tangentielle de la balle entrante (le long de t)
+  const vRel = Vn + un;
+  let e = c.e0 - 0.0022 * (vRel - 20); // = corAt(e0, vRel), écrit en ligne
+  e = e < 0.55 ? 0.55 : e > 0.93 ? 0.93 : e;
+  const eA = (e * c.Me - BALL.m) / (c.Me + BALL.m); // COR apparent (raquette libre), Cross : e_A = (e·M − m)/(M + m)
+  const vn = eA * un + (1 + eA) * Vn;
+  // Tangentiel : la balle glisse puis roule sur le cordage. Vitesse relative du point de contact q = Vt − ut.
+  // Roulement atteint : impulsion tangentielle J/m = k/(1+k)·q (sphère creuse k = 0,55) → ω·r = J/(k·m).
+  // Si le frottement ne suffit pas (|J| > μ·J_n), la balle glisse tout le contact : J/m = μ·(vn + un).
+  // Le surcroît d'effet des cordes qui glissent puis reviennent (snapback) est un facteur empirique (c.spinF).
+  const q = Vt - ut;
+  const jRoll = ROLL_J * q;
+  const jMax = c.mu * (vn + un);
+  let j = jRoll, slip = 0;
+  if (jRoll > jMax) { j = jMax; slip = 1; } else if (jRoll < -jMax) { j = -jMax; slip = 1; }
+  const vt = ut + j;
+  const spinRad = (j / (BALL.I * BALL.r)) * c.spinF; // > 0 = lift
+  out[0] = Math.sqrt(vn * vn + vt * vt);
+  out[1] = phi + Math.atan2(vt, vn) / DEG;
+  out[2] = spinRad * RAD2RPM;
+  out[3] = eA; out[4] = vn; out[5] = vt; out[6] = vRel; out[7] = e; out[8] = slip;
+  return out;
+}
+const ROLL_J = BALL.I / (1 + BALL.I);
+const RAD2RPM = 60 / (2 * Math.PI);
+
+export function impactSolve(c, V, alpha, phi, u = 0) {
+  const o = impactSolveInto(c, V, alpha, phi, u, new Float64Array(9));
+  const vRel = o[6];
+  // Temps de contact : demi-période d'un oscillateur masse réduite / ressorts en série ; raidissement
+  // non linéaire de la balle aux fortes vitesses (≈ v^−0,08).
+  const tContact = Math.PI * Math.sqrt(c.mred / c.kEff) * Math.pow(20 / Math.max(5, vRel), 0.08);
+  // Force maximale pour une impulsion en demi-sinus : F_max = J·π / (2·t_c), J = m·(vn + un)
+  const peakForce = BALL.m * (o[4] + u * Math.cos(phi * DEG)) * Math.PI / (2 * tContact);
+  return { e: o[7], eA: o[3], speed: o[0], launch: o[1], spinRpm: o[2], spinRad: o[2] / RAD2RPM, tContact, peakForce, vn: o[4], vt: o[5], slip: o[8] === 1 };
+}
+
 // inp : { rk, string, tension, gauge, V (m/s, vitesse raquette au point d'impact), alpha (trajectoire raquette °, + = monte),
 //         phi (normale de la face °, + = face ouverte), u (vitesse balle entrante m/s), impactCm, offCenter (cm latéral) }
 export function impact(inp) {
-  const { rk, string, tension, gauge = 1.25, V, alpha, phi, u = 0, impactCm = 54, offCenter = 0 } = inp;
-  const S = STRINGS[string];
-  let Me = effectiveMass(rk, impactCm);
-  if (offCenter) { const tw = rk.tw / 1e4, d = offCenter / 100; Me = 1 / (1 / Me + (d * d) / tw); }
-  const k = bedStiffness(rk, string, tension, gauge);
-  // COR « vrai » balle / cordage tenu à la main : effet trampoline des basses tensions, pertes du cadre (RA)
-  const eStr = 0.86 + 0.0035 * (24 - tension) + S.e - (gauge - 1.25) * 0.05;
-  const frameLoss = 0.0016 * Math.max(0, 75 - rk.ra) * (impactCm > 58 || impactCm < 48 ? 1.8 : 1) + Math.abs(offCenter) * 0.006;
-  const e = clamp(eStr - frameLoss, 0.6, 0.92);
-  const eA = (e * Me - BALL.m) / (Me + BALL.m); // COR apparent
-  const gamma = (alpha - phi) * DEG;
-  const Vn = V * Math.cos(gamma), Vt = V * Math.sin(gamma);
-  const un = u * Math.cos(phi * DEG);
-  const vn = eA * un + (1 + eA) * Vn;
-  // Tangentiel : roulement au contact (coque k = 0,55) ; part de la balle et part de rotation
-  const kk = BALL.I;
-  const roll = 1 / (1 + 1 / kk);
-  const vt = Vt * roll;
-  const spinRad = (Vt * (1 - roll)) / BALL.r * S.snap * (rk.pattern === '18x20' ? 0.93 : 1) * (1 + (1.25 - gauge) * 0.6);
-  const mred = (BALL.m * Me) / (BALL.m + Me);
-  const tContact = Math.PI * Math.sqrt(mred / k);
-  const speed = Math.hypot(vn, vt);
-  const launch = phi + Math.atan2(vt, vn) / DEG;
-  const peakForce = mred * (vn + un) / tContact * Math.PI / 2;
-  const comfort = clamp(S.comfort * (1 - Math.max(0, rk.ra - 62) * 0.012) * (1 - Math.abs(offCenter) * 0.04) * (1 - Math.max(0, tension - 21) * 0.025), 0, 1);
-  return { Me, k, e, eA, speed, launch, spinRpm: spinRad * 60 / (2 * Math.PI), spinRad, tContact, peakForce, comfort, vn, vt };
+  const { V, alpha, phi, u = 0 } = inp;
+  const c = impactSetup(inp);
+  const s = impactSolve(c, V, alpha, phi, u);
+  return { Me: c.Me, k: c.k, kEff: c.kEff, e: s.e, eA: s.eA, speed: s.speed, launch: s.launch, spinRpm: s.spinRpm, spinRad: s.spinRad,
+    tContact: s.tContact, peakForce: s.peakForce, comfort: c.comfort, vn: s.vn, vt: s.vt, slip: s.slip };
+}
+
+// Vitesse de swing relative quand on change de raquette (Cross & Bower 2006 : V ∝ SW^−0,27, à effort égal).
+export function swingSpeedFactor(rk, rkRef) {
+  return Math.pow(rk.sw / rkRef.sw, -0.27);
 }
 
 // ---------- Air ----------
@@ -120,48 +192,205 @@ export const SURFACES = {
   indoor: { label: 'Indoor rapide', ey: 0.78, mu: 0.5 },
 };
 
-// Trajectoire 2D (x vers le filet, y vertical). spin > 0 = lift. Renvoie points + évènements.
+// Coefficients aérodynamiques (Štěpánek 1988, ajustés : balle feutrée neuve Cd ≈ 0,55 sans effet).
+// vs = r·|ω| (vitesse périphérique). Cd croît avec l'effet ; Cl = 1 / (2,022 + 0,981·v/vs).
+const A_BALL = Math.PI * BALL.r ** 2;
+// Cd tabulé en fonction du paramètre d'effet S = vs/v (Math.exp/log coûtent ~50 ns : trop pour la boucle chaude).
+const CD_N = 512, CD_SMAX = 1.2;
+const CD_TAB = new Float64Array(CD_N + 1);
+for (let i = 0; i <= CD_N; i++) {
+  const S = (i / CD_N) * CD_SMAX;
+  CD_TAB[i] = S <= 0 ? 0.55 : 0.55 + 1 / Math.pow(22.053 + 4.196 * Math.pow(1 / S, 2.5), 0.4);
+}
+function aeroCd(sp, vs) {
+  let f = (vs / sp) * (CD_N / CD_SMAX);
+  if (f >= CD_N) return CD_TAB[CD_N];
+  const i = f | 0; f -= i;
+  return CD_TAB[i] + (CD_TAB[i + 1] - CD_TAB[i]) * f;
+}
+function aeroCl(sp, vs) {
+  return vs / (2.022 * vs + 0.981 * sp); // = 1 / (2,022 + 0,981·v/vs), nul sans effet
+}
+// Décroissance de l'effet en vol : couple visqueux ∝ ρ·v·ω (≈ 4–5 %/s à 30 m/s). Ordre de grandeur, peu sensible.
+const SPIN_DECAY = 0.0016 / 1.21;
+
+// Dérivées de l'état (x, y, vx, vy) ; w (rad/s, > 0 = lift) supposé constant sur le pas.
+function deriv4(vx, vy, w, rho, wind, out) {
+  const rx = vx - wind, ry = vy, sp = Math.sqrt(rx * rx + ry * ry) || 1e-9;
+  const vs = BALL.r * Math.abs(w);
+  const kD = 0.5 * rho * A_BALL * aeroCd(sp, vs) * sp / BALL.m;
+  const kL = 0.5 * rho * A_BALL * aeroCl(sp, vs) * sp / BALL.m * (w >= 0 ? 1 : -1);
+  // Magnus : perpendiculaire à la vitesse relative ; lift (w > 0) pousse vers le bas en avançant
+  out[0] = -kD * rx + kL * ry;
+  out[1] = -kD * ry - kL * rx - G;
+}
+
+// Trajectoire 2D (x vers le filet, y vertical ; y = hauteur du CENTRE de la balle). spin > 0 = lift.
+// Intégration RK4 à pas fixe de l'état complet. Renvoie points + évènements (filet, rebond, après rebond).
 export function flight({ v, launch, spinRpm, h0, x0 = 0, rho = 1.2, wind = 0, surface = 'hard', dt = 0.002, maxT = 3, keepPts = true }) {
-  const A = Math.PI * BALL.r ** 2, m = BALL.m, r = BALL.r;
+  const r = BALL.r;
   let x = x0, y = h0, vx = v * Math.cos(launch * DEG), vy = v * Math.sin(launch * DEG);
   let w = spinRpm * 2 * Math.PI / 60;
   const pts = keepPts ? [[x, y]] : null;
   let netY = null, bounce = null, after = null, t = 0;
-  const S = SURFACES[surface];
-  const acc = (vx, vy) => {
-    const rx = vx - wind, ry = vy, sp = Math.hypot(rx, ry) || 1e-6;
-    const Cd = 0.55, s = (r * Math.abs(w)) / sp, Cl = Math.sign(w) / (2 + 1 / Math.max(1e-4, s));
-    const kD = 0.5 * rho * A * Cd * sp / m, kL = 0.5 * rho * A * Cl * sp / m;
-    // Magnus : perpendiculaire à la vitesse ; lift (w>0) pousse vers le bas en avançant
-    return [-kD * rx + kL * ry, -kD * ry - kL * rx - G];
-  };
+  const S = SURFACES[surface] || SURFACES.hard;
+  const a1 = [0, 0], a2 = [0, 0], a3 = [0, 0], a4 = [0, 0];
   while (t < maxT) {
-    const [ax1, ay1] = acc(vx, vy);
-    const [ax2, ay2] = acc(vx + ax1 * dt / 2, vy + ay1 * dt / 2);
-    const [ax3, ay3] = acc(vx + ax2 * dt / 2, vy + ay2 * dt / 2);
-    const [ax4, ay4] = acc(vx + ax3 * dt, vy + ay3 * dt);
-    const nvx = vx + (ax1 + 2 * ax2 + 2 * ax3 + ax4) * dt / 6, nvy = vy + (ay1 + 2 * ay2 + 2 * ay3 + ay4) * dt / 6;
-    const nx = x + (vx + nvx) / 2 * dt, ny = y + (vy + nvy) / 2 * dt;
+    deriv4(vx, vy, w, rho, wind, a1);
+    const v2x = vx + a1[0] * dt / 2, v2y = vy + a1[1] * dt / 2; deriv4(v2x, v2y, w, rho, wind, a2);
+    const v3x = vx + a2[0] * dt / 2, v3y = vy + a2[1] * dt / 2; deriv4(v3x, v3y, w, rho, wind, a3);
+    const v4x = vx + a3[0] * dt, v4y = vy + a3[1] * dt; deriv4(v4x, v4y, w, rho, wind, a4);
+    const nx = x + dt * (vx + 2 * v2x + 2 * v3x + v4x) / 6, ny = y + dt * (vy + 2 * v2y + 2 * v3y + v4y) / 6;
+    const nvx = vx + dt * (a1[0] + 2 * a2[0] + 2 * a3[0] + a4[0]) / 6, nvy = vy + dt * (a1[1] + 2 * a2[1] + 2 * a3[1] + a4[1]) / 6;
     if (netY === null && x < COURT.net && nx >= COURT.net) netY = y + (ny - y) * (COURT.net - x) / (nx - x);
+    const yPrev = y, xPrev = x, tPrev = t;
     x = nx; y = ny; vx = nvx; vy = nvy; t += dt;
-    w *= 1 - 0.02 * dt; // amortissement du spin dans l'air
+    w *= Math.exp(-SPIN_DECAY * rho * Math.hypot(vx, vy) * dt);
     if (keepPts) pts.push([x, Math.max(0, y)]);
-    if (y <= 0) {
+    if (y <= r) {
       if (!bounce) {
-        bounce = { x, t, vx, vy, speed: Math.hypot(vx, vy) * 3.6 };
-        // Rebond : restitution verticale + frottement (glissement ou roulement)
+        // Instant du contact interpolé dans le pas (précision ~ dt² sur la position)
+        const f = (yPrev - r) / ((yPrev - y) || 1e-9);
+        const bx = xPrev + (x - xPrev) * f, bt = tPrev + dt * f;
+        bounce = { x: bx, t: bt, vx, vy, speed: Math.hypot(vx, vy) * 3.6 };
+        // Rebond : restitution verticale + frottement. Vitesse du point de contact vSurf = vx − ω·r.
+        // Si le frottement suffit, la balle finit en roulement (Δv = k/(1+k)·vSurf), sinon elle glisse (Δv = μ·(1+e)·|vy|).
         const vyOut = -vy * S.ey;
-        const vSurf = vx - w * r; // vitesse du point de contact
+        const vSurf = vx - w * r;
         const dvMax = S.mu * (1 + S.ey) * Math.abs(vy);
         const dvRoll = vSurf * (BALL.I / (1 + BALL.I));
         const dv = Math.sign(vSurf) * Math.min(Math.abs(dvRoll), dvMax);
-        vx -= dv; w += dv / (BALL.I * r) ; vy = vyOut; y = 0.0001;
-        after = { vx, vy, peak: (vy * vy) / (2 * G), angle: Math.atan2(vy, vx) / DEG, kmh: Math.hypot(vx, vy) * 3.6, spinRpm: w * 60 / (2 * Math.PI) };
+        vx -= dv; w += dv / (BALL.I * r); vy = vyOut; y = r + 1e-4;
+        after = { vx, vy, peak: (vy * vy) / (2 * G) + r, angle: Math.atan2(vy, vx) / DEG, kmh: Math.hypot(vx, vy) * 3.6, spinRpm: w * 60 / (2 * Math.PI) };
       } else break;
     }
     if (x > COURT.base + 8) break;
   }
   return { pts, netY, bounce, after, flightTime: bounce ? bounce.t : t };
+}
+
+// ---------- Trajectoire RAPIDE (utilisable des millions de fois) ----------
+// RK4 à grand pas (adapté à la vitesse) + localisation des évènements (filet, sol) par interpolation de Hermite
+// cubique (position ET vitesse aux deux bouts du pas → erreur O(dt⁴) sur l'évènement). Effet supposé constant
+// pendant un pas, décroissance appliquée entre les pas. Pas de liste de points, aucune allocation dans la boucle.
+// Renvoie { netY, bounce: { x, t, vx, vy } | null, flightTime } — compatible avec isIn().
+const _a1 = [0, 0], _a2 = [0, 0], _a3 = [0, 0], _a4 = [0, 0];
+export function flightFast({ v, launch, spinRpm, h0, x0 = 0, rho = 1.2, wind = 0, xNet = COURT.net, xStop = COURT.base + 4, maxT = 4 }) {
+  const r = BALL.r;
+  let x = x0, y = h0, vx = v * Math.cos(launch * DEG), vy = v * Math.sin(launch * DEG);
+  let w = spinRpm * 2 * Math.PI / 60;
+  // Pas : ≈ 2,5 m de parcours, borné ; RK4 + Hermite reste à quelques cm du rebond de référence (voir tests).
+  const dt = clamp(2.5 / Math.max(5, v), 0.025, 0.08);
+  let netY = null, t = 0;
+  while (t < maxT) {
+    deriv4(vx, vy, w, rho, wind, _a1);
+    const v2x = vx + _a1[0] * dt / 2, v2y = vy + _a1[1] * dt / 2; deriv4(v2x, v2y, w, rho, wind, _a2);
+    const v3x = vx + _a2[0] * dt / 2, v3y = vy + _a2[1] * dt / 2; deriv4(v3x, v3y, w, rho, wind, _a3);
+    const v4x = vx + _a3[0] * dt, v4y = vy + _a3[1] * dt; deriv4(v4x, v4y, w, rho, wind, _a4);
+    const nx = x + dt * (vx + 2 * v2x + 2 * v3x + v4x) / 6, ny = y + dt * (vy + 2 * v2y + 2 * v3y + v4y) / 6;
+    const nvx = vx + dt * (_a1[0] + 2 * _a2[0] + 2 * _a3[0] + _a4[0]) / 6, nvy = vy + dt * (_a1[1] + 2 * _a2[1] + 2 * _a3[1] + _a4[1]) / 6;
+    if (netY === null && x < xNet && nx >= xNet) {
+      const s = hermiteRoot(x, vx, nx, nvx, dt, xNet);
+      netY = hermite(y, vy, ny, nvy, dt, s);
+    }
+    if (ny <= r) {
+      const s = hermiteRoot(y, vy, ny, nvy, dt, r);
+      const bx = hermite(x, vx, nx, nvx, dt, s);
+      return { netY, bounce: { x: bx, t: t + s * dt, vx: vx + (nvx - vx) * s, vy: vy + (nvy - vy) * s }, flightTime: t + s * dt };
+    }
+    x = nx; y = ny; vx = nvx; vy = nvy; t += dt;
+    w *= 1 - SPIN_DECAY * rho * Math.sqrt(vx * vx + vy * vy) * dt; // ≈ exp(−λ·dt), λ·dt ≪ 1
+    if (x > xStop) break;
+  }
+  return { netY, bounce: null, flightTime: t };
+}
+// Hermite cubique sur [0,1] : p(s) avec p(0)=p0, p(1)=p1, p'(0)=v0·dt, p'(1)=v1·dt
+function hermite(p0, v0, p1, v1, dt, s) {
+  const s2 = s * s, s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * v0 * dt + (-2 * s3 + 3 * s2) * p1 + (s3 - s2) * v1 * dt;
+}
+function hermiteRoot(p0, v0, p1, v1, dt, target) {
+  let s = (target - p0) / ((p1 - p0) || 1e-12);
+  s = clamp(s, 0, 1);
+  for (let i = 0; i < 4; i++) { // Newton (la fonction est quasi linéaire sur un pas)
+    const s2 = s * s;
+    const f = hermite(p0, v0, p1, v1, dt, s) - target;
+    const df = (6 * s2 - 6 * s) * p0 + (3 * s2 - 4 * s + 1) * v0 * dt + (-6 * s2 + 6 * s) * p1 + (3 * s2 - 2 * s) * v1 * dt;
+    if (Math.abs(df) < 1e-12) break;
+    s = clamp(s - f / df, 0, 1);
+  }
+  return s;
+}
+
+// ---------- Fenêtre d'angle de départ ----------
+// Pour (v, effet, hauteur de frappe) donnés, la balle est bonne si l'angle de départ θ est dans [θlo, θhi] :
+// θlo = angle minimal qui passe le filet (+ rayon de balle), θhi = angle maximal qui retombe avant la ligne.
+// Les deux bornes sont monotones en θ sur [−20°, 40°] (hors lobs), on les trouve par dichotomie.
+export function launchWindow({ v, spinRpm, h0, x0 = 0, rho = 1.2, wind = 0, target = 'base', iters = 12, guess = null }) {
+  const lim = target === 'service' ? COURT.service : COURT.base;
+  const clear = COURT.netH + BALL.r;
+  const base = { v, spinRpm, h0, x0, rho, wind, launch: 0, xStop: COURT.net + 0.5 };
+  const netOk = (th) => { base.launch = th; base.xStop = COURT.net + 0.5; const f = flightFast(base); return f.netY !== null && f.netY >= clear; };
+  const inLong = (th) => { base.launch = th; base.xStop = lim + 0.5; const f = flightFast(base); return f.bounce !== null && f.bounce.x <= lim; };
+  const LO = -20, HI = 40;
+  // Dichotomie sur un prédicat monotone (faux puis vrai si up, vrai puis faux sinon) ; crochet resserré si on a
+  // une estimation (cellule voisine de la table), élargi au domaine complet si le crochet ne contient pas la borne.
+  const solve = (pred, up, g) => {
+    let a = LO, b = HI, n = iters;
+    if (g !== null && g > LO + 2 && g < HI - 2) {
+      const ga = g - 2, gb = g + 2;
+      if (pred(ga) !== up && pred(gb) === up) { a = ga; b = gb; n = Math.max(6, iters - 4); }
+    }
+    if (a === LO) { if (pred(LO) === up) return LO; if (pred(HI) !== up) return HI; }
+    for (let i = 0; i < n; i++) { const m = (a + b) / 2; if (pred(m) === up) b = m; else a = m; }
+    return (a + b) / 2;
+  };
+  const lo = solve(netOk, true, guess ? guess.lo : null);
+  const hi = solve(inLong, false, guess ? guess.hi : null);
+  return { lo, hi };
+}
+
+// Table de substitution (surrogate) des fenêtres : grille v × effet × h0 → (θlo, θhi), interpolée trilinéairement.
+// Construite une fois par condition (densité de l'air, vent, distance, cible) ; ~0,2–0,5 s.
+export function buildWindowTable({ vMin = 10, vMax = 80, nv = 36, sMin = -3000, sMax = 6000, ns = 31, hMin = 1, hMax = 1, nh = 1, x0 = 0, rho = 1.2, wind = 0, target = 'base', iters = 11 }) {
+  const lo = new Float32Array(nv * ns * nh), hi = new Float32Array(nv * ns * nh);
+  const dv = (vMax - vMin) / (nv - 1), ds = (sMax - sMin) / (ns - 1), dh = nh > 1 ? (hMax - hMin) / (nh - 1) : 1;
+  for (let ih = 0; ih < nh; ih++) for (let iv = 0; iv < nv; iv++) {
+    let guess = null;
+    for (let is = 0; is < ns; is++) {
+      const wdw = launchWindow({ v: vMin + iv * dv, spinRpm: sMin + is * ds, h0: hMin + ih * dh, x0, rho, wind, target, iters, guess });
+      const id = (ih * nv + iv) * ns + is;
+      lo[id] = wdw.lo; hi[id] = wdw.hi;
+      guess = wdw;
+    }
+  }
+  return { vMin, dv, nv, sMin, ds, ns, hMin, dh, nh, x0, rho, wind, target, lo, hi };
+}
+
+// Interpolation trilinéaire + gradients ∂/∂v (°/(m/s)) et ∂/∂spin (°/rpm). out = Float64Array(6) :
+// [θlo, θhi, dlo/dv, dhi/dv, dlo/ds, dhi/ds]. Sans allocation (appelée des millions de fois).
+export function windowLookup(T, v, spin, h, out) {
+  let fv = (v - T.vMin) / T.dv, fs = (spin - T.sMin) / T.ds, fh = T.nh > 1 ? (h - T.hMin) / T.dh : 0;
+  fv = fv < 0 ? 0 : fv > T.nv - 1.0001 ? T.nv - 1.0001 : fv;
+  fs = fs < 0 ? 0 : fs > T.ns - 1.0001 ? T.ns - 1.0001 : fs;
+  fh = fh < 0 ? 0 : fh > T.nh - 1.0001 ? Math.max(0, T.nh - 1.0001) : fh;
+  const iv = fv | 0, is = fs | 0, ih = fh | 0;
+  const a = fv - iv, b = fs - is, c = T.nh > 1 ? fh - ih : 0;
+  const ns = T.ns, nvs = T.nv * ns;
+  const i000 = ih * nvs + iv * ns + is, i100 = i000 + ns, i010 = i000 + 1, i110 = i100 + 1;
+  const ih1 = T.nh > 1 ? nvs : 0;
+  for (let k = 0; k < 2; k++) {
+    const A = k === 0 ? T.lo : T.hi;
+    // plan h = ih
+    const p00 = A[i000], p10 = A[i100], p01 = A[i010], p11 = A[i110];
+    const q00 = A[i000 + ih1], q10 = A[i100 + ih1], q01 = A[i010 + ih1], q11 = A[i110 + ih1];
+    const f00 = p00 + (q00 - p00) * c, f10 = p10 + (q10 - p10) * c, f01 = p01 + (q01 - p01) * c, f11 = p11 + (q11 - p11) * c;
+    const f0 = f00 + (f10 - f00) * a, f1 = f01 + (f11 - f01) * a;
+    out[k] = f0 + (f1 - f0) * b;
+    out[2 + k] = ((f10 - f00) * (1 - b) + (f11 - f01) * b) / T.dv;
+    out[4 + k] = (f1 - f0) / T.ds;
+  }
+  return out;
 }
 
 // Est-ce que la frappe est bonne ? target : 'service' ou 'base'
@@ -174,12 +403,18 @@ export function isIn(res, target) {
   return { ok: true };
 }
 
-// Monte-Carlo : taux de réussite avec dispersion
+// Tirage gaussien (Box-Muller)
+function gauss() {
+  let u = 0; while (u === 0) u = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+}
+
+// Monte-Carlo : taux de réussite avec dispersion (σ angle en °, σ vitesse et σ effet relatifs). Intégration rapide.
 export function successRate(nom, target, disp = { angle: 0.7, speed: 0.03, spin: 0.12 }, N = 1500) {
   let ok = 0, net = 0, long = 0;
+  const lim = target === 'service' ? COURT.service : COURT.base;
   for (let i = 0; i < N; i++) {
-    const g = () => { let s = 0; for (let k = 0; k < 6; k++) s += Math.random(); return (s - 3) / Math.sqrt(0.5); };
-    const r = flight({ ...nom, v: nom.v * (1 + g() * disp.speed), launch: nom.launch + g() * disp.angle, spinRpm: nom.spinRpm * (1 + g() * disp.spin), keepPts: false, dt: 0.004 });
+    const r = flightFast({ ...nom, v: nom.v * (1 + gauss() * disp.speed), launch: nom.launch + gauss() * disp.angle, spinRpm: nom.spinRpm * (1 + gauss() * disp.spin), xStop: lim + 0.5 });
     const s = isIn(r, target);
     if (s.ok) ok++; else if (s.why === 'filet') net++; else long++;
   }
@@ -190,7 +425,7 @@ export function successRate(nom, target, disp = { angle: 0.7, speed: 0.03, spin:
 export function bestAngle(nom, target, disp, N = 600) {
   let best = { rate: -1 };
   for (let a = -14; a <= 18; a += 0.5) {
-    const r = flight({ ...nom, launch: a, keepPts: false, dt: 0.004 });
+    const r = flightFast({ ...nom, launch: a });
     const s = isIn(r, target);
     if (!s.ok) continue;
     const mc = successRate({ ...nom, launch: a }, target, disp, N);
