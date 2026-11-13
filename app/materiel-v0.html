@@ -1,0 +1,483 @@
+<title>KYRON Matériel</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : banc d'essai. Réglages à gauche (collants), instruments de mesure à droite, recalcul en direct. Monothème noir (DA KYRON). */
+:root{
+  color-scheme:dark;
+  --bg:#000; --bg2:#0a0a0b; --bg3:#141416; --ink:#f4f4f2; --ink2:#c9c9c6; --mute:#8b8b8f; --dim:#4a4a4e;
+  --rule:rgba(255,255,255,.12); --rule2:rgba(255,255,255,.24);
+  --acc:#ff4d1a; --good:#f4f4f2; --bgk:#000;
+  --f-disp:"Michroma","Eurostile","Arial",sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1380px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.lbl{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+header .wrap{display:flex;align-items:center;gap:20px;padding-block:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand svg{width:26px;height:26px}
+.brand b{font-family:var(--f-disp);font-weight:400;font-size:15px;letter-spacing:.14em}
+.brand span{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.14em;color:var(--mute);text-transform:uppercase}
+nav{display:flex;gap:18px;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;flex-wrap:wrap}
+nav a{color:var(--mute);text-decoration:none}
+nav a:hover,nav a.on{color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--rule2)}
+.seg button{border:0;background:none;padding:8px 12px;font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);cursor:pointer}
+.seg button+button{border-left:1px solid var(--rule2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#000}
+
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;padding-block:20px 60px}
+@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}}
+aside{position:sticky;top:76px;align-self:start;max-height:calc(100vh - 90px);overflow:auto;border:1px solid var(--rule);background:var(--bg2)}
+@media (max-width:980px){aside{position:static;max-height:none}}
+fieldset{border:0;border-bottom:1px solid var(--rule);margin:0;padding:14px 16px;display:grid;gap:10px}
+legend{font-family:var(--f-disp);font-size:12px;letter-spacing:.08em;padding:0;margin-bottom:4px;float:left;width:100%}
+legend i{font-style:normal;color:var(--acc);font-family:var(--f-mono);margin-right:8px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:10px;align-items:center}
+.row label{color:var(--ink2);font-size:13px}
+.row input[type=number],.row select,select.full{background:#000;border:1px solid var(--rule2);padding:6px 8px;width:100%;font-family:var(--f-mono);font-size:12.5px;border-radius:0}
+select.full{width:100%}
+.sl{display:grid;grid-template-columns:minmax(0,1fr) 56px;gap:10px;align-items:center}
+.sl label{grid-column:1/-1;color:var(--ink2);font-size:13px;display:flex;justify-content:space-between}
+.sl label output{font-family:var(--f-mono);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--acc);grid-column:1/-1}
+.hint{font-size:12px;color:var(--mute);margin:0}
+
+main{display:grid;gap:20px;min-width:0}
+.panel{border:1px solid var(--rule);background:var(--bg2);padding:18px;min-width:0}
+.ph{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ph h2{font-family:var(--f-disp);font-weight:400;font-size:16px;letter-spacing:.04em;margin:0}
+.ph h2 i{font-style:normal;font-family:var(--f-mono);font-size:12px;color:var(--acc);margin-right:10px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+@media (max-width:1180px){.two{grid-template-columns:minmax(0,1fr)}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border-top:1px solid var(--rule);border-left:1px solid var(--rule)}
+.kpi{padding:12px 14px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);min-width:0}
+.kpi b{display:block;font-family:var(--f-disp);font-weight:400;font-size:22px;margin:8px 0 2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi b small{font-size:11px;color:var(--mute);margin-left:4px;font-family:var(--f-mono)}
+.kpi .d{font-family:var(--f-mono);font-size:11px;color:var(--mute)}
+.kpi .d.up{color:var(--acc)}
+.kpi.hero b{font-size:30px;color:var(--acc)}
+.formula{font-family:var(--f-mono);font-size:11.5px;color:var(--mute);border-left:1px solid var(--acc);padding:2px 0 2px 10px;margin:14px 0 0}
+canvas{display:block;width:100%}
+.court{height:260px}
+.small{height:180px}
+.racket{height:300px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--f-mono);font-size:11px;color:var(--mute);margin-top:8px}
+.legend span::before{content:"";display:inline-block;width:12px;height:2px;background:var(--c);margin-right:6px;vertical-align:middle}
+.btn{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:10px 14px;border:1px solid var(--ink);background:var(--ink);color:#000;cursor:pointer}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:none;color:var(--ink);border-color:var(--rule2)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 8px;border-bottom:1px solid var(--rule)}
+th{font-family:var(--f-mono);font-weight:400;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+td.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.cur td{color:var(--acc)}
+.scroll{overflow-x:auto}
+.recs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:760px){.recs{grid-template-columns:minmax(0,1fr)}}
+.rec{border:1px solid var(--rule);padding:12px 14px;background:var(--bg3);display:grid;gap:4px}
+.rec:first-child{border-color:var(--acc)}
+.rec b{font-weight:600}
+.rec .m{font-family:var(--f-mono);font-size:12px;color:var(--ink2)}
+.alert{border:1px solid var(--acc);color:var(--ink);padding:10px 12px;font-size:13px;margin-top:12px}
+.alert b{color:var(--acc);font-weight:500}
+.mc-out{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center}
+@media (max-width:640px){.mc-out{grid-template-columns:minmax(0,1fr)}}
+.big{font-family:var(--f-disp);font-size:46px;line-height:1}
+.big small{font-size:14px;color:var(--mute);margin-left:6px;font-family:var(--f-mono)}
+.bar3{display:flex;height:8px;margin-top:10px;background:var(--rule)}
+.bar3 i{display:block;height:100%}
+.note{color:var(--mute);font-size:12px;max-width:90ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="m1" viewBox="0 0 100 100">
+  <g stroke-linecap="round" fill="none">
+    <g stroke-width="16" style="stroke:currentColor"><line x1="26" y1="14" x2="26" y2="86"/><line x1="26" y1="56" x2="74" y2="16"/><line x1="46" y1="40" x2="76" y2="86"/></g>
+    <g stroke-width="6" style="stroke:var(--bgk)"><line x1="26" y1="14" x2="26" y2="86"/><line x1="26" y1="56" x2="74" y2="16"/><line x1="46" y1="40" x2="76" y2="86"/></g>
+  </g>
+  <g stroke-width="3.5" style="fill:var(--bgk);stroke:currentColor"><circle cx="26" cy="14" r="10"/><circle cx="26" cy="86" r="10"/><circle cx="74" cy="16" r="10"/><circle cx="76" cy="86" r="10"/><circle cx="46" cy="40" r="10"/></g>
+  <g style="fill:var(--acc)"><circle cx="26" cy="14" r="4"/><circle cx="26" cy="86" r="4"/><circle cx="74" cy="16" r="4"/><circle cx="76" cy="86" r="4"/><circle cx="46" cy="40" r="4"/></g>
+</symbol></defs></svg>
+
+<header>
+  <div class="wrap">
+    <div class="brand"><svg aria-hidden="true"><use href="#m1"/></svg><b>KYRON</b><span>Banc matériel · v0.1</span></div>
+    <nav aria-label="Sections"><a href="#raquette">Raquette</a><a href="#cordage">Cordage</a><a href="#impact">Impact</a><a href="#trajectoire">Trajectoire</a><a href="#marge">Marge</a><a href="#comparer">Comparer</a></nav>
+    <div class="seg" role="group" aria-label="Coup" id="stroke">
+      <button data-s="serve" aria-pressed="true">Service</button><button data-s="fh" aria-pressed="false">Coup droit</button><button data-s="bh" aria-pressed="false">Revers</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap grid">
+  <aside aria-label="Réglages">
+    <fieldset>
+      <legend><i>01</i>Raquette</legend>
+      <select class="full" id="rkPreset" aria-label="Modèle de raquette"></select>
+      <div class="row"><label for="rkMass">Masse cordée (g)</label><input type="number" id="rkMass" step="1"></div>
+      <div class="row"><label for="rkBal">Équilibre (cm du bas)</label><input type="number" id="rkBal" step="0.1"></div>
+      <div class="row"><label for="rkSw">Swingweight (kg·cm²)</label><input type="number" id="rkSw" step="1"></div>
+      <div class="row"><label for="rkTw">Twistweight (kg·cm²)</label><input type="number" id="rkTw" step="0.1"></div>
+      <div class="row"><label for="rkRa">Rigidité (RA)</label><input type="number" id="rkRa" step="1"></div>
+      <div class="row"><label for="rkHead">Tamis (in²)</label><input type="number" id="rkHead" step="1"></div>
+      <div class="row"><label for="rkPat">Plan de cordage</label><select id="rkPat"><option>16x19</option><option>18x20</option></select></div>
+    </fieldset>
+    <fieldset>
+      <legend><i>02</i>Plombs (grammes)</legend>
+      <div id="leads" style="display:grid;gap:10px"></div>
+    </fieldset>
+    <fieldset>
+      <legend><i>03</i>Cordage</legend>
+      <div class="row"><label for="stMat">Matériau</label><select id="stMat"></select></div>
+      <div class="row"><label for="stGauge">Jauge (mm)</label><select id="stGauge"><option>1.20</option><option selected>1.25</option><option>1.30</option><option>1.35</option></select></div>
+      <div class="sl"><label for="stT">Tension à la pose <output id="stTo"></output></label><input type="range" id="stT" min="16" max="30" step="0.5" value="24"></div>
+      <div class="sl"><label for="stDays">Jours depuis la pose <output id="stDayso"></output></label><input type="range" id="stDays" min="0" max="60" step="1" value="5"></div>
+      <div class="sl"><label for="stHours">Heures jouées depuis <output id="stHourso"></output></label><input type="range" id="stHours" min="0" max="40" step="0.5" value="6"></div>
+    </fieldset>
+    <fieldset>
+      <legend><i>04</i>Geste</legend>
+      <div class="sl"><label for="gV">Vitesse raquette au point d'impact <output id="gVo"></output></label><input type="range" id="gV" min="60" max="200" step="1"></div>
+      <div class="sl"><label for="gA">Trajectoire de raquette (+ = monte) <output id="gAo"></output></label><input type="range" id="gA" min="-15" max="45" step="0.5"></div>
+      <div class="sl"><label for="gP">Angle de face (+ = ouverte) <output id="gPo"></output></label><input type="range" id="gP" min="-15" max="20" step="0.5"></div>
+      <div class="sl"><label for="gU">Balle qui arrive <output id="gUo"></output></label><input type="range" id="gU" min="0" max="140" step="1"></div>
+      <div class="sl"><label for="gH">Hauteur de contact <output id="gHo"></output></label><input type="range" id="gH" min="0.4" max="3.2" step="0.01"></div>
+      <div class="sl"><label for="gI">Point d'impact (cm du bas) <output id="gIo"></output></label><input type="range" id="gI" min="44" max="64" step="0.5" value="54"></div>
+      <div class="sl"><label for="gO">Décentrage latéral <output id="gOo"></output></label><input type="range" id="gO" min="-4" max="4" step="0.25" value="0"></div>
+      <p class="hint">Vitesse de raquette : reprise de l'analyse vidéo quand elle est branchée. Valeurs par défaut d'un bon joueur de compétition.</p>
+    </fieldset>
+    <fieldset>
+      <legend><i>05</i>Conditions</legend>
+      <div class="row"><label for="cSurf">Surface</label><select id="cSurf"></select></div>
+      <div class="sl"><label for="cAlt">Altitude <output id="cAlto"></output></label><input type="range" id="cAlt" min="0" max="2500" step="50" value="0"></div>
+      <div class="sl"><label for="cTemp">Température <output id="cTempo"></output></label><input type="range" id="cTemp" min="0" max="40" step="1" value="20"></div>
+      <div class="sl"><label for="cWind">Vent (+ = dans le dos) <output id="cWindo"></output></label><input type="range" id="cWind" min="-8" max="8" step="0.5" value="0"></div>
+    </fieldset>
+  </aside>
+
+  <main>
+    <section class="panel" id="raquette">
+      <div class="ph"><h2><i>C06 · C07</i>Raquette</h2><span class="lbl">effet des plombs en direct</span></div>
+      <div class="two">
+        <div>
+          <div class="kpis" id="rkK"></div>
+          <p class="formula">SW′ = SW + m·(d − 10)² · équilibre′ = (m·b + m_p·d) / (m + m_p) · masse effective au point d'impact = 1 / (1/m + x²/I_cm)</p>
+        </div>
+        <div><canvas class="racket" id="rkCv" aria-label="Schéma de la raquette avec plombs, centre de masse et centre de percussion"></canvas></div>
+      </div>
+    </section>
+
+    <section class="panel" id="cordage">
+      <div class="ph"><h2><i>D01 · D02 · D03</i>Cordage</h2><span class="lbl">tension réelle aujourd'hui</span></div>
+      <div class="two">
+        <div>
+          <div class="kpis" id="stK"></div>
+          <div id="stAlert"></div>
+          <p class="formula">T(t) = T∞ + (T₀ − T∞)·e^(−t/τ) × (1 − usure·heures) · raideur du lit k ∝ tension × matériau × densité / tamis · contact = π·√(m_réd / k)</p>
+        </div>
+        <div><canvas class="small" id="stCv" aria-label="Courbe de perte de tension sur 60 jours"></canvas><div class="legend"><span style="--c:var(--acc)">Ton cordage</span><span style="--c:var(--dim)">Seuil de recordage (−20 %)</span></div></div>
+      </div>
+      <div style="margin-top:20px">
+        <div class="ph"><h2 style="font-size:13px"><i>D05</i>Cordage recommandé pour ton geste</h2>
+          <div class="seg" role="group" aria-label="Objectif" id="goal"><button data-g="speed" aria-pressed="false">Vitesse</button><button data-g="spin" aria-pressed="true">Effet</button><button data-g="control" aria-pressed="false">Contrôle</button><button data-g="comfort" aria-pressed="false">Confort</button></div>
+        </div>
+        <div class="recs" id="recs"></div>
+        <p class="note" style="margin:10px 0 0">Recherche exhaustive : 5 matériaux × 3 jauges × 11 tensions = 165 cordages simulés avec ton geste, classés selon l'objectif, pénalité aux tensions extrêmes pour le bras.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="impact">
+      <div class="ph"><h2><i>F01</i>Impact raquette-balle</h2><span class="lbl">les 4 millisecondes de contact</span></div>
+      <div class="kpis" id="imK"></div>
+      <p class="formula">v_sortie = e_A·v_entrée + (1 + e_A)·V_raquette · e_A = (e·M_eff − m_balle)/(M_eff + m_balle) · effet = 0,645·V_tangentielle / r_balle × snapback</p>
+    </section>
+
+    <section class="panel" id="trajectoire">
+      <div class="ph"><h2><i>E03 · F03</i>Trajectoire et rebond</h2><span class="lbl" id="trLbl"></span></div>
+      <canvas class="court" id="trCv" aria-label="Trajectoire de la balle vue de côté, avec filet et lignes"></canvas>
+      <div class="legend"><span style="--c:var(--acc)">Ta frappe</span><span style="--c:var(--mute)">Même frappe sans effet</span><span style="--c:var(--dim)">Sans air (vide)</span></div>
+      <div class="kpis" id="trK" style="margin-top:14px"></div>
+      <p class="formula">m·a = m·g − ½ρ·A·C_d·|v|·v + ½ρ·A·C_L·|v|·(ω̂ × v) · C_d = 0,55 · C_L = 1/(2 + v/(r·ω)) · ρ selon altitude, température, humidité · intégration RK4 pas 2 ms</p>
+    </section>
+
+    <section class="panel" id="marge">
+      <div class="ph"><h2><i>F05</i>Marge de sécurité</h2><button class="btn" id="mcBtn">Lancer la simulation</button></div>
+      <div class="mc-out">
+        <div><div class="lbl">Balles bonnes</div><div class="big" id="mcRate">—<small>%</small></div><div class="bar3" id="mcBar"></div><div class="legend" style="margin-top:6px"><span style="--c:var(--ink)">Bonnes</span><span style="--c:var(--acc)">Filet</span><span style="--c:var(--dim)">Long</span></div></div>
+        <div><canvas class="small" id="mcCv" aria-label="Taux de réussite selon la vitesse de balle"></canvas></div>
+      </div>
+      <p class="note" id="mcNote">Chaque frappe est rejouée des milliers de fois avec ta dispersion naturelle (angle ± 0,7°, vitesse ± 3 %, effet ± 12 %). Pour chaque vitesse, le moteur cherche l'angle de départ le plus sûr : la courbe montre à partir de quand frapper plus fort coûte des points.</p>
+    </section>
+
+    <section class="panel" id="comparer">
+      <div class="ph"><h2><i>C08</i>Comparer les raquettes avec ton geste</h2><span class="lbl">même swing, même cordage</span></div>
+      <div class="scroll"><table id="cmp"><thead><tr><th>Raquette</th><th>Masse</th><th>SW</th><th>Balle</th><th>Effet</th><th>Confort</th><th>Balles bonnes*</th></tr></thead><tbody></tbody></table></div>
+      <p class="note" style="margin:10px 0 0">* Taux calculé sur 800 frappes simulées chacune, à l'angle de départ actuel. Archétypes de raquettes ; la base des modèles du marché arrive avec la V2.</p>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+import * as P from './core/physics.js';
+const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const DEF = {
+  serve: { V: 150, A: 4, P: -3, U: 0, H: 2.75, target: 'service', impact: 56 },
+  fh: { V: 95, A: 24, P: 2, U: 80, H: 0.95, target: 'base', impact: 54 },
+  bh: { V: 88, A: 20, P: 3, U: 80, H: 0.9, target: 'base', impact: 54 },
+};
+const st = { stroke: 'serve', goal: 'spin', leads: { h12: 0, h10_2: 0, h9_3: 0, throat: 0, handle: 0 }, mc: null };
+
+// ----- Remplissage des réglages -----
+$('#rkPreset').innerHTML = P.RACKETS.map((r) => `<option value="${r.id}">${r.name}</option>`).join('');
+$('#stMat').innerHTML = Object.entries(P.STRINGS).map(([k, s]) => `<option value="${k}">${s.label}</option>`).join('');
+$('#cSurf').innerHTML = Object.entries(P.SURFACES).map(([k, s]) => `<option value="${k}">${s.label}</option>`).join('');
+$('#leads').innerHTML = Object.entries(P.LEAD_SPOTS).map(([k, s]) => `<div class="sl"><label for="ld_${k}">${s.label} <output id="ld_${k}o">0 g</output></label><input type="range" id="ld_${k}" data-k="${k}" min="0" max="8" step="0.5" value="0"></div>`).join('');
+function loadPreset(id) {
+  const r = P.RACKETS.find((x) => x.id === id);
+  $('#rkMass').value = r.mass; $('#rkBal').value = r.balance; $('#rkSw').value = r.sw; $('#rkTw').value = r.tw; $('#rkRa').value = r.ra; $('#rkHead').value = r.head; $('#rkPat').value = r.pattern;
+}
+function loadStroke(s) {
+  const d = DEF[s];
+  $('#gV').value = d.V; $('#gA').value = d.A; $('#gP').value = d.P; $('#gU').value = d.U; $('#gH').value = d.H; $('#gI').value = d.impact;
+}
+loadPreset('ctrl98'); loadStroke('serve');
+
+function base() {
+  return { name: 'Ma raquette', mass: +$('#rkMass').value, balance: +$('#rkBal').value, sw: +$('#rkSw').value, tw: +$('#rkTw').value, ra: +$('#rkRa').value, head: +$('#rkHead').value, pattern: $('#rkPat').value };
+}
+function read() {
+  const leads = {}; document.querySelectorAll('#leads input').forEach((i) => { leads[i.dataset.k] = +i.value; });
+  const stock = P.customize(base(), {});
+  const rk = P.customize(base(), leads);
+  const T0 = +$('#stT').value, days = +$('#stDays').value, hours = +$('#stHours').value, mat = $('#stMat').value, gauge = +$('#stGauge').value;
+  const Tnow = P.tensionAfter(mat, T0, days, hours);
+  const imp = { rk, string: mat, tension: Tnow, gauge, V: +$('#gV').value / 3.6, alpha: +$('#gA').value, phi: +$('#gP').value, u: +$('#gU').value / 3.6, impactCm: +$('#gI').value, offCenter: +$('#gO').value };
+  const rho = P.airDensity(+$('#cAlt').value, +$('#cTemp').value);
+  return { leads, stock, rk, T0, Tnow, days, hours, mat, gauge, imp, rho, h0: +$('#gH').value, wind: +$('#cWind').value, surface: $('#cSurf').value, target: DEF[st.stroke].target };
+}
+
+const f1 = (v, d = 1) => v.toFixed(d).replace('.', ',');
+const kpi = (label, val, unit, delta, cls = '') => `<div class="kpi ${cls}"><div class="lbl">${label}</div><b>${val}<small>${unit}</small></b><div class="d ${delta && /^\+/.test(delta) ? 'up' : ''}">${delta || '&nbsp;'}</div></div>`;
+const sgn = (v, d = 1, u = '') => Math.abs(v) < Math.pow(10, -d) / 2 ? '' : `${v > 0 ? '+' : '−'}${f1(Math.abs(v), d)}${u} vs origine`;
+
+function fit(c) { const r = c.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1); const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr); if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height); return { g, w: r.width, h: r.height }; }
+
+// ----- Rendu -----
+function update() {
+  // sorties des curseurs
+  $('#stTo').textContent = `${f1(+$('#stT').value)} kg`; $('#stDayso').textContent = `${$('#stDays').value} j`; $('#stHourso').textContent = `${f1(+$('#stHours').value)} h`;
+  $('#gVo').textContent = `${$('#gV').value} km/h`; $('#gAo').textContent = `${f1(+$('#gA').value)}°`; $('#gPo').textContent = `${f1(+$('#gP').value)}°`;
+  $('#gUo').textContent = `${$('#gU').value} km/h`; $('#gHo').textContent = `${f1(+$('#gH').value, 2)} m`; $('#gIo').textContent = `${f1(+$('#gI').value)} cm`; $('#gOo').textContent = `${f1(+$('#gO').value, 2)} cm`;
+  $('#cAlto').textContent = `${$('#cAlt').value} m`; $('#cTempo').textContent = `${$('#cTemp').value} °C`; $('#cWindo').textContent = `${f1(+$('#cWind').value)} m/s`;
+  document.querySelectorAll('#leads input').forEach((i) => { $(`#ld_${i.dataset.k}o`).textContent = `${f1(+i.value)} g`; });
+
+  const c = read(), rk = c.rk, s0 = c.stock;
+  const im = P.impact(c.imp), im0 = P.impact({ ...c.imp, rk: s0 });
+  const Me = P.effectiveMass(rk, c.imp.impactCm), Me0 = P.effectiveMass(s0, c.imp.impactCm);
+  const hl = (rk.balance - 68.58 / 2) / 0.3175; // points (1/8 in) tête lourde (+) / légère (−)
+  $('#rkK').innerHTML = [
+    kpi('Masse', f1(rk.mass, 1), 'g', sgn(rk.mass - s0.mass, 1, ' g')),
+    kpi('Équilibre', f1(rk.balance, 1), 'cm', `${hl < 0 ? f1(-hl, 1) + ' pts tête légère' : f1(hl, 1) + ' pts tête lourde'}`),
+    kpi('Swingweight', f1(rk.sw, 1), 'kg·cm²', sgn(rk.sw - s0.sw, 1)),
+    kpi('Twistweight', f1(rk.tw, 2), 'kg·cm²', sgn(rk.tw - s0.tw, 2)),
+    kpi('Centre de percussion', f1(rk.cop, 1), 'cm', 'axe de rotation à 10 cm'),
+    kpi('Masse effective à l\'impact', f1(Me * 1000, 0), 'g', sgn((Me - Me0) * 1000, 0, ' g')),
+    kpi('Balle', f1(im.speed * 3.6, 0), 'km/h', sgn((im.speed - im0.speed) * 3.6, 1, ' km/h'), 'hero'),
+    kpi('Effort de swing', f1(rk.sw / s0.sw * 100, 1), '%', 'à vitesse égale, ∝ SW'),
+  ].join('');
+  drawRacket(rk, c.leads, c.imp.impactCm);
+
+  // Cordage
+  const k = P.bedStiffness(rk, c.mat, c.Tnow, c.gauge);
+  const loss = (1 - c.Tnow / c.T0) * 100;
+  $('#stK').innerHTML = [
+    kpi('Tension aujourd\'hui', f1(c.Tnow, 1), 'kg', `−${f1(loss, 1)} % depuis la pose`, 'hero'),
+    kpi('Raideur du lit', f1(k / 1000, 1), 'kN/m', ''),
+    kpi('Temps de contact', f1(im.tContact * 1000, 2), 'ms', ''),
+    kpi('COR balle / cordage', f1(im.e, 3), '', 'restitution d\'énergie'),
+  ].join('');
+  const S = P.STRINGS[c.mat];
+  $('#stAlert').innerHTML = loss >= 20 || (c.mat.includes('poly') && c.hours >= 15)
+    ? `<div class="alert"><b>Recorder maintenant.</b> Ton ${S.label.toLowerCase()} a perdu ${f1(loss, 0)} % de tension${c.mat.includes('poly') ? ` et compte ${f1(c.hours, 0)} h de jeu : un polyester perd son retour élastique (moins d'effet, plus de chocs dans le bras) bien avant de casser` : ''}.</div>`
+    : `<div class="note" style="margin-top:12px">Recordage conseillé dans environ ${daysLeft(c)} jours au rythme actuel.</div>`;
+  drawTension(c);
+  renderRecs(c);
+
+  // Impact
+  const cmpFh = c.imp.u > 0 ? `balle entrante ${Math.round(c.imp.u * 3.6)} km/h` : 'balle lancée';
+  $('#imK').innerHTML = [
+    kpi('Vitesse de balle', f1(im.speed * 3.6, 0), 'km/h', cmpFh, 'hero'),
+    kpi('Effet', f1(im.spinRpm, 0), 'tr/min', im.spinRpm > 0 ? 'lift' : 'slice'),
+    kpi('Angle de départ', f1(im.launch, 1), '°', '+ = vers le haut'),
+    kpi('COR apparent e_A', f1(im.eA, 3), '', 'raquette libre'),
+    kpi('Force maximale', f1(im.peakForce, 0), 'N', `≈ ${f1(im.peakForce / 9.81, 0)} kg pendant ${f1(im.tContact * 1000, 1)} ms`),
+    kpi('Confort', f1(im.comfort * 100, 0), '%', 'vibrations transmises'),
+  ].join('');
+
+  // Trajectoire
+  const nom = { v: im.speed, launch: im.launch, spinRpm: im.spinRpm, h0: c.h0, rho: c.rho, wind: c.wind, surface: c.surface };
+  const tr = P.flight(nom), trFlat = P.flight({ ...nom, spinRpm: 0 }), trVac = P.flight({ ...nom, spinRpm: 0, rho: 0 });
+  const ok = P.isIn(tr, c.target);
+  $('#trLbl').textContent = ok.ok ? 'balle bonne' : ok.why === 'filet' ? 'balle dans le filet' : 'balle longue';
+  $('#trLbl').style.color = ok.ok ? css('--ink') : css('--acc');
+  drawCourt(tr, trFlat, trVac, c.target);
+  $('#trK').innerHTML = [
+    kpi('Hauteur au filet', tr.netY != null ? f1(tr.netY, 2) : '—', 'm', tr.netY != null ? `marge ${f1((tr.netY - 0.914 - 0.0335) * 100, 0)} cm` : ''),
+    kpi('Rebond à', tr.bounce ? f1(tr.bounce.x, 2) : '—', 'm', tr.bounce ? `${f1((c.target === 'service' ? P.COURT.service : P.COURT.base) - tr.bounce.x, 2)} m avant la ligne` : ''),
+    kpi('Vitesse au rebond', tr.bounce ? f1(tr.bounce.speed, 0) : '—', 'km/h', tr.bounce ? `−${f1((1 - tr.bounce.speed / (im.speed * 3.6)) * 100, 0)} % (air)` : ''),
+    kpi('Hauteur du rebond', tr.after ? f1(tr.after.peak, 2) : '—', 'm', tr.after ? `angle ${f1(tr.after.angle, 0)}°` : ''),
+    kpi('Temps de vol', f1(tr.flightTime * 1000, 0), 'ms', 'jusqu\'au rebond'),
+    kpi('Densité de l\'air', f1(c.rho, 3), 'kg/m³', ''),
+  ].join('');
+
+  renderCompare(c, nom);
+}
+
+function daysLeft(c) {
+  for (let d = c.days; d <= c.days + 120; d++) {
+    const h = c.hours + (d - c.days) * (c.days ? c.hours / c.days : 1);
+    if (P.tensionAfter(c.mat, c.T0, d, h) <= c.T0 * 0.8 || (c.mat.includes('poly') && h >= 15)) return d - c.days;
+  }
+  return '120+';
+}
+
+function drawRacket(rk, leads, impactCm) {
+  const { g, w, h } = fit($('#rkCv'));
+  const L = 68.6, sc = (h - 30) / L, cx = w / 2, y = (cm) => h - 15 - cm * sc;
+  // cadre : manche + gorge + tamis (ellipse)
+  const headLen = 33, headW = 25, hy = y(L - headLen / 2);
+  g.strokeStyle = css('--ink2'); g.lineWidth = 2;
+  g.beginPath(); g.ellipse(cx, hy, headW / 2 * sc, headLen / 2 * sc, 0, 0, Math.PI * 2); g.stroke();
+  // cordes
+  g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1;
+  for (let i = -7; i <= 7; i++) { const x = cx + i * headW / 16 * sc; const dy = headLen / 2 * sc * Math.sqrt(Math.max(0, 1 - (i / 8) ** 2)); g.beginPath(); g.moveTo(x, hy - dy); g.lineTo(x, hy + dy); g.stroke(); }
+  for (let j = -8; j <= 8; j++) { const yy = hy + j * headLen / 19 * sc; const dx = headW / 2 * sc * Math.sqrt(Math.max(0, 1 - (j / 9.5) ** 2)); g.beginPath(); g.moveTo(cx - dx, yy); g.lineTo(cx + dx, yy); g.stroke(); }
+  g.strokeStyle = css('--ink2'); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(cx - 1.4 * sc, y(0)); g.lineTo(cx - 1.4 * sc, y(24)); g.lineTo(cx - headW / 2.6 * sc, y(L - headLen + 1)); g.moveTo(cx + 1.4 * sc, y(0)); g.lineTo(cx + 1.4 * sc, y(24)); g.lineTo(cx + headW / 2.6 * sc, y(L - headLen + 1)); g.stroke();
+  g.strokeRect(cx - 1.6 * sc, y(24), 3.2 * sc, 24 * sc);
+  // repères
+  const mark = (cm, label, col, side = 1) => { g.strokeStyle = col; g.fillStyle = col; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(cx - 70, y(cm)); g.lineTo(cx + 70, y(cm)); g.stroke(); g.setLineDash([]); g.font = `11px ${css('--f-mono')}`; g.textAlign = side > 0 ? 'left' : 'right'; g.fillText(label, side > 0 ? cx + 76 : cx - 76, y(cm) + 4); };
+  mark(rk.balance, `équilibre ${f1(rk.balance, 1)} cm`, css('--ink'), 1);
+  mark(rk.cop, `centre de percussion ${f1(rk.cop, 1)}`, css('--mute'), -1);
+  mark(impactCm, `impact ${f1(impactCm, 1)}`, css('--acc'), 1);
+  // plombs
+  g.fillStyle = css('--acc');
+  for (const [k, gr] of Object.entries(leads)) {
+    if (!gr) continue; const s = P.LEAD_SPOTS[k]; const r = 3 + gr * 0.8;
+    const pts = s.lat ? [-1, 1].map((sd) => [cx + sd * Math.min(headW / 2 - 0.5, s.lat) * sc, y(s.d)]) : [[cx, y(s.d)]];
+    for (const [px, py] of pts) { g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.fill(); }
+  }
+}
+
+function drawTension(c) {
+  const { g, w, h } = fit($('#stCv'));
+  const pad = { l: 34, r: 10, t: 10, b: 22 }, X = (d) => pad.l + d / 60 * (w - pad.l - pad.r);
+  const lo = c.T0 * 0.6, hi = c.T0 * 1.02, Y = (t) => pad.t + (1 - (t - lo) / (hi - lo)) * (h - pad.t - pad.b);
+  g.font = `10px ${css('--f-mono')}`; g.fillStyle = css('--mute'); g.strokeStyle = css('--rule');
+  for (const t of [lo, (lo + hi) / 2, c.T0]) { g.beginPath(); g.moveTo(pad.l, Y(t)); g.lineTo(w - pad.r, Y(t)); g.stroke(); g.textAlign = 'right'; g.fillText(f1(t, 0), pad.l - 6, Y(t) + 3); }
+  g.textAlign = 'center'; for (const d of [0, 15, 30, 45, 60]) g.fillText(`${d} j`, X(d), h - 6);
+  g.strokeStyle = css('--dim'); g.setLineDash([4, 4]); g.beginPath(); g.moveTo(pad.l, Y(c.T0 * 0.8)); g.lineTo(w - pad.r, Y(c.T0 * 0.8)); g.stroke(); g.setLineDash([]);
+  const rate = c.days ? c.hours / c.days : 1;
+  g.strokeStyle = css('--acc'); g.lineWidth = 2; g.beginPath();
+  for (let d = 0; d <= 60; d += 0.5) { const t = P.tensionAfter(c.mat, c.T0, d, d * rate); d === 0 ? g.moveTo(X(d), Y(t)) : g.lineTo(X(d), Y(t)); }
+  g.stroke(); g.lineWidth = 1;
+  g.fillStyle = css('--ink'); g.beginPath(); g.arc(X(c.days), Y(c.Tnow), 4, 0, Math.PI * 2); g.fill();
+}
+
+function renderRecs(c) {
+  const recs = P.recommendStrings({ ...c.imp, rk: c.rk }, st.goal);
+  $('#recs').innerHTML = recs.map((r, i) => `<div class="rec"><span class="lbl">${i === 0 ? 'Meilleur choix' : 'Alternative ' + i}</span><b>${P.STRINGS[r.string].label} ${f1(r.gauge, 2)} mm · ${f1(r.tension, 0)} kg</b>
+    <span class="m">${f1(r.speed, 0)} km/h · ${f1(r.spin, 0)} tr/min</span><span class="m">contrôle ${f1(r.control * 100, 0)} % · confort ${f1(r.comfort * 100, 0)} % · contact ${f1(r.tContact * 1000, 2)} ms</span></div>`).join('');
+}
+
+function drawCourt(tr, flat, vac, target) {
+  const { g, w, h } = fit($('#trCv'));
+  const pad = { l: 34, r: 12, t: 12, b: 26 };
+  const xMax = 27, yMax = Math.max(3.4, ...tr.pts.map((p) => p[1])) + 0.2;
+  const X = (x) => pad.l + x / xMax * (w - pad.l - pad.r), Y = (y) => h - pad.b - y / yMax * (h - pad.t - pad.b);
+  g.fillStyle = css('--bg3'); g.fillRect(X(0), Y(0), X(P.COURT.base) - X(0), 3);
+  g.font = `10px ${css('--f-mono')}`; g.fillStyle = css('--mute'); g.textAlign = 'center';
+  const lines = [[0, 'fond'], [P.COURT.net, 'filet'], [P.COURT.service, 'service'], [P.COURT.base, 'fond']];
+  for (const [x, l] of lines) { g.strokeStyle = x === P.COURT.service && target === 'service' ? css('--acc') : css('--rule2'); g.beginPath(); g.moveTo(X(x), Y(0)); g.lineTo(X(x), Y(0) + 6); g.stroke(); g.fillText(`${l} ${f1(x, 1)}`, X(x), h - 8); }
+  g.strokeStyle = css('--ink'); g.lineWidth = 2; g.beginPath(); g.moveTo(X(P.COURT.net), Y(0)); g.lineTo(X(P.COURT.net), Y(0.914)); g.stroke(); g.lineWidth = 1;
+  g.textAlign = 'right'; g.strokeStyle = css('--rule');
+  for (let yy = 1; yy <= yMax; yy += 1) { g.beginPath(); g.moveTo(pad.l, Y(yy)); g.lineTo(w - pad.r, Y(yy)); g.stroke(); g.fillText(`${yy} m`, pad.l - 4, Y(yy) + 3); }
+  const path = (pts, col, lw, dash) => { g.strokeStyle = col; g.lineWidth = lw; g.setLineDash(dash || []); g.beginPath(); pts.forEach((p, i) => { const x = X(Math.min(p[0], xMax)), y = Y(p[1]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]); g.lineWidth = 1; };
+  path(vac.pts, css('--dim'), 1, [2, 4]);
+  path(flat.pts, css('--mute'), 1, [5, 4]);
+  path(tr.pts, css('--acc'), 2.5);
+  if (tr.bounce) { g.fillStyle = css('--acc'); g.beginPath(); g.arc(X(tr.bounce.x), Y(0), 4, 0, Math.PI * 2); g.fill(); }
+  // ombre des positions toutes les 50 ms
+  g.fillStyle = css('--ink');
+  tr.pts.forEach((p, i) => { if (i % 25 === 0 && p[0] < xMax) { g.beginPath(); g.arc(X(p[0]), Y(p[1]), 1.6, 0, Math.PI * 2); g.fill(); } });
+}
+
+function renderCompare(c, nom) {
+  const rows = [{ ...base(), name: 'Ma raquette (réglée)', id: 'mine', leads: c.leads }, ...P.RACKETS.map((r) => ({ ...r, leads: {} }))];
+  $('#cmp tbody').innerHTML = rows.map((r) => {
+    const rk = P.customize(r, r.leads);
+    const im = P.impact({ ...c.imp, rk });
+    const sr = P.successRate({ ...nom, v: im.speed, spinRpm: im.spinRpm, launch: im.launch }, c.target, undefined, 250);
+    return `<tr class="${r.id === 'mine' ? 'cur' : ''}"><td>${r.name}</td><td class="n">${f1(rk.mass, 0)} g</td><td class="n">${f1(rk.sw, 0)}</td><td class="n">${f1(im.speed * 3.6, 0)} km/h</td><td class="n">${f1(im.spinRpm, 0)}</td><td class="n">${f1(im.comfort * 100, 0)} %</td><td class="n">${f1(sr.rate * 100, 0)} %</td></tr>`;
+  }).join('');
+}
+
+// ----- Monte-Carlo marge -----
+let worker = null;
+$('#mcBtn').onclick = () => {
+  const c = read();
+  if (worker) worker.terminate();
+  worker = new Worker(new URL('./core/margin-worker.js', location.href), { type: 'module' });
+  $('#mcBtn').disabled = true; $('#mcRate').innerHTML = '…<small>%</small>';
+  const cfg = { imp: { ...c.imp }, h0: c.h0, rho: c.rho, wind: c.wind, surface: c.surface };
+  worker.onmessage = (e) => {
+    const d = e.data;
+    if (d.type === 'current') {
+      $('#mcRate').innerHTML = `${f1(d.cur.rate * 100, 1)}<small>%</small>`;
+      $('#mcBar').innerHTML = `<i style="width:${d.cur.rate * 100}%;background:var(--ink)"></i><i style="width:${d.cur.net * 100}%;background:var(--acc)"></i><i style="width:${d.cur.long * 100}%;background:var(--dim)"></i>`;
+    }
+    if (d.type === 'progress') $('#mcNote').textContent = `Balayage des vitesses… ${Math.round(d.p * 100)} % · ≈ ${d.trials.toLocaleString('fr-FR')} trajectoires simulées`;
+    if (d.type === 'done') {
+      $('#mcBtn').disabled = false; st.mc = d; drawMC(d);
+      const best = d.pts.reduce((a, b) => (b.rate >= 0.9 && b.kmh > (a?.kmh || 0) ? b : a), null);
+      const cur = d.pts.find((p) => p.isCur);
+      $('#mcNote').textContent = `≈ ${d.trials.toLocaleString('fr-FR')} trajectoires simulées en ${f1(d.ms / 1000, 1)} s. ` + (best ? `Vitesse maximale en gardant 90 % de balles bonnes : ${f1(best.kmh, 0)} km/h, angle de départ ${f1(best.launch, 1)}°. ` : 'Aucune vitesse ne garde 90 % de balles bonnes avec cette dispersion : travaille la régularité avant la vitesse. ') + (cur && cur.launch != null ? `À ta vitesse actuelle, l'angle le plus sûr est ${f1(cur.launch, 1)}° (${f1(cur.rate * 100, 0)} %).` : '');
+    }
+  };
+  worker.onerror = (e) => { $('#mcBtn').disabled = false; $('#mcNote').textContent = `Simulation interrompue : ${e.message || 'erreur du moteur'}.`; };
+  worker.postMessage({ cfg, target: c.target, disp: { angle: 0.7, speed: 0.03, spin: 0.12 } });
+};
+function drawMC(d) {
+  const { g, w, h } = fit($('#mcCv'));
+  const pad = { l: 36, r: 10, t: 10, b: 22 };
+  const xs = d.pts.map((p) => p.kmh), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const X = (v) => pad.l + (v - x0) / (x1 - x0) * (w - pad.l - pad.r), Y = (r) => pad.t + (1 - r) * (h - pad.t - pad.b);
+  g.font = `10px ${css('--f-mono')}`; g.fillStyle = css('--mute'); g.strokeStyle = css('--rule');
+  for (const r of [0, 0.5, 0.9, 1]) { g.beginPath(); g.moveTo(pad.l, Y(r)); g.lineTo(w - pad.r, Y(r)); g.stroke(); g.textAlign = 'right'; g.fillText(`${r * 100}%`, pad.l - 5, Y(r) + 3); }
+  g.textAlign = 'center'; d.pts.forEach((p, i) => { if (i % 2 === 0) g.fillText(`${f1(p.kmh, 0)}`, X(p.kmh), h - 6); });
+  g.strokeStyle = css('--ink'); g.lineWidth = 2; g.beginPath(); d.pts.forEach((p, i) => (i ? g.lineTo(X(p.kmh), Y(p.rate)) : g.moveTo(X(p.kmh), Y(p.rate)))); g.stroke(); g.lineWidth = 1;
+  d.pts.forEach((p) => { g.fillStyle = p.isCur ? css('--acc') : css('--ink'); g.beginPath(); g.arc(X(p.kmh), Y(p.rate), p.isCur ? 5 : 2.5, 0, Math.PI * 2); g.fill(); });
+}
+
+// ----- Évènements -----
+let raf = 0; const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); };
+document.querySelector('aside').addEventListener('input', schedule);
+$('#rkPreset').addEventListener('change', (e) => { loadPreset(e.target.value); schedule(); });
+$('#stroke').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; st.stroke = b.dataset.s; document.querySelectorAll('#stroke button').forEach((x) => x.setAttribute('aria-pressed', x === b)); loadStroke(st.stroke); schedule(); });
+$('#goal').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; st.goal = b.dataset.g; document.querySelectorAll('#goal button').forEach((x) => x.setAttribute('aria-pressed', x === b)); schedule(); });
+addEventListener('resize', schedule);
+update();
+</script>

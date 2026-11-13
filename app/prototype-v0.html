@@ -1,0 +1,812 @@
+<title>KYRON Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : instrument de labo. Barre de commande en haut, scène vidéo + verdict côte à côte, puis bancs de mesure. */
+:root {
+  --bg: #07090c;
+  --panel: #0d1117;
+  --panel-2: #121821;
+  --line: #1d2530;
+  --line-2: #2a3442;
+  --fg: #e6ebf1;
+  --muted: #8592a3;
+  --dim: #56616f;
+  --accent: #4fc3ff;
+  --accent-soft: rgba(79, 195, 255, .12);
+  --signal: #ffb547;
+  --good: #3ddc97;
+  --warn: #ffb547;
+  --bad: #ff6060;
+  --pelvis: #a98bff;
+  --thorax: #4fc3ff;
+  --elbow: #ffb547;
+  --wrist: #ff7a9c;
+  --f-display: "Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 10px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--f-body); font-size: 14px; line-height: 1.5; margin: 0; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1440px; margin: 0 auto; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+/* En-tête */
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: rgba(7, 9, 12, .92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.bar { display: flex; align-items: center; gap: 16px; padding-block: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 12px; margin-right: auto; }
+.wordmark { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-spacing: .32em; }
+.wordmark i { font-style: normal; color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px; background: var(--panel); }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; color: var(--muted); font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); font-weight: 600; }
+
+.tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding-block: 14px; }
+.chip { border: 1px solid var(--line-2); background: var(--panel); border-radius: 8px; padding: 8px 14px; font-size: 13px; color: var(--muted); }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--fg); background: var(--accent-soft); }
+.sep { width: 1px; height: 24px; background: var(--line-2); }
+.btn { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #031119; font-weight: 600; }
+.btn:disabled { opacity: .45; cursor: default; }
+.spacer { flex: 1; }
+.status { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; min-height: 20px; }
+.progress { width: 160px; height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+/* Grille principale */
+main { display: grid; gap: 16px; padding-block: 4px 48px; }
+.top { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 980px) { .top { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
+.panel h2 { font-family: var(--f-display); font-weight: 600; font-size: 15px; letter-spacing: .06em; text-transform: uppercase; margin: 0; }
+.ph { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* Scène */
+.stage { position: relative; background: #040507; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 10; max-width: 100%; }
+.stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.hud { position: absolute; left: 12px; top: 10px; display: grid; gap: 2px; pointer-events: none; }
+.hud .mono { font-size: 11px; color: var(--muted); }
+.hud .phase { font-family: var(--f-display); font-size: 18px; letter-spacing: .08em; text-transform: uppercase; }
+.hud-r { left: auto; right: 12px; text-align: right; }
+.transport { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.transport .btn { padding: 6px 10px; font-size: 13px; }
+.timeline { width: 100%; height: 46px; display: block; margin-top: 8px; cursor: pointer; touch-action: none; }
+.strokes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+/* Verdict */
+.verdict { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+.ring { width: 112px; height: 112px; }
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
+.kpi .v { font-family: var(--f-mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.kpi .v small { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.est { color: var(--dim); font-size: 11px; }
+.fixes { display: grid; gap: 10px; margin-top: 16px; }
+.fix { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 4px; background: var(--panel-2); }
+.fix-h { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pill { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.s3 { color: var(--bad); } .s2 { color: var(--warn); } .s1 { color: var(--accent); } .s0 { color: var(--good); }
+.fix b { font-weight: 600; font-size: 14.5px; }
+.fix p { margin: 0; color: var(--muted); font-size: 13px; }
+.gain { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--good); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-family: var(--f-mono); font-weight: 400; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-s { height: 5px; border-radius: 3px; background: var(--line); width: 70px; overflow: hidden; }
+.bar-s > i { display: block; height: 100%; }
+.scroll { overflow-x: auto; }
+
+/* Bancs */
+.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 980px) { .row { grid-template-columns: minmax(0, 1fr); } }
+.chain { display: grid; gap: 10px; }
+.chain-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 80px; gap: 10px; align-items: center; font-size: 13px; }
+.lane { position: relative; height: 22px; background: var(--panel-2); border-radius: 4px; border: 1px solid var(--line); }
+.lane i { position: absolute; top: 3px; bottom: 3px; width: 3px; border-radius: 2px; }
+.lane .imp { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--fg); opacity: .5; }
+.gaps { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.gapc { font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line-2); border-radius: 6px; padding: 4px 8px; }
+.gapc.ok { border-color: color-mix(in srgb, var(--good) 50%, transparent); color: var(--good); }
+.gapc.ko { border-color: color-mix(in srgb, var(--warn) 50%, transparent); color: var(--warn); }
+
+.sim-out { display: grid; gap: 12px; margin-top: 12px; }
+.big { font-family: var(--f-display); font-size: 40px; font-weight: 700; line-height: 1; }
+.big small { font-size: 16px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+.counter { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.sens { display: grid; gap: 6px; }
+.sens-r { display: grid; grid-template-columns: 150px minmax(0, 1fr) 60px; gap: 10px; align-items: center; font-size: 13px; }
+.sens-r .track { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.sens-r .track i { display: block; height: 100%; background: var(--accent); }
+
+canvas.chart { width: 100%; height: 220px; display: block; }
+canvas.view3d { width: 100%; height: 300px; display: block; cursor: grab; touch-action: none; background: #040507; border-radius: 8px; border: 1px solid var(--line); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: middle; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--panel-2); display: grid; gap: 6px; align-content: start; }
+.card b { font-weight: 600; }
+.card p { margin: 0; color: var(--muted); font-size: 13px; }
+.card .meta { font-family: var(--f-mono); font-size: 11.5px; color: var(--accent); }
+.note { color: var(--dim); font-size: 12px; max-width: 80ch; }
+.adv-only { display: none; }
+body.adv .adv-only { display: block; }
+body.adv .simple-only { display: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 520px) {
+  .verdict { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  .sens-r { grid-template-columns: 110px minmax(0, 1fr) 54px; }
+  .wordmark { font-size: 19px; }
+}
+</style>
+
+<header>
+  <div class="wrap bar">
+    <div class="brand">
+      <span class="wordmark">KYR<i>O</i>N</span>
+      <span class="label">Lab · analyse du geste · v0.1</span>
+    </div>
+    <div class="seg" role="group" aria-label="Mode d'affichage">
+      <button id="m-simple" aria-pressed="true">Simple</button>
+      <button id="m-adv" aria-pressed="false">Avancé</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tools">
+    <div class="seg" role="group" aria-label="Coup analysé" id="strokeSeg">
+      <button data-stroke="serve" aria-pressed="true">Service</button>
+      <button data-stroke="forehand" aria-pressed="false">Coup droit</button>
+      <button data-stroke="backhand" aria-pressed="false">Revers</button>
+    </div>
+    <div class="seg" role="group" aria-label="Main de frappe" id="handSeg">
+      <button data-hand="right" aria-pressed="true">Droitier</button>
+      <button data-hand="left" aria-pressed="false">Gaucher</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn" id="demoBtn">Charger la démo</button>
+    <label class="btn primary" for="file" tabindex="0" id="fileLbl">Importer une vidéo</label>
+    <input type="file" id="file" accept="video/*" hidden>
+  </div>
+  <div class="status" id="status"><span id="statusText">Démo chargée : service synthétique d'un joueur droitier, 120 i/s.</span><span class="progress" id="prog" hidden><i></i></span></div>
+</div>
+
+<main class="wrap">
+  <section class="top">
+    <div class="panel">
+      <div class="ph"><h2>Capture</h2><span class="label" id="srcLabel">Source : démo synthétique</span></div>
+      <div class="stage" id="stage">
+        <video id="video" playsinline muted hidden></video>
+        <canvas id="overlay"></canvas>
+        <div class="hud"><span class="mono" id="hudT">t = 0.000 s</span><span class="phase" id="hudPhase">—</span></div>
+        <div class="hud hud-r"><span class="mono" id="hudA1">genou —</span><span class="mono" id="hudA2">coude —</span><span class="mono" id="hudA3">poignet —</span></div>
+      </div>
+      <div class="transport">
+        <button class="btn" id="play" aria-label="Lecture">▶ Lecture</button>
+        <button class="btn" id="prev" aria-label="Image précédente">‹</button>
+        <button class="btn" id="next" aria-label="Image suivante">›</button>
+        <button class="btn" id="toImpact">Aller à l'impact</button>
+        <span class="spacer"></span>
+        <div class="seg" role="group" aria-label="Vitesse de lecture" id="speedSeg">
+          <button data-sp="0.1" aria-pressed="false">×0.1</button>
+          <button data-sp="0.25" aria-pressed="true">×0.25</button>
+          <button data-sp="1" aria-pressed="false">×1</button>
+        </div>
+      </div>
+      <canvas class="timeline" id="timeline" aria-label="Frise des phases du geste"></canvas>
+      <div class="strokes" id="strokes"></div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2>Verdict</h2><span class="label" id="strokeLabel">Service</span></div>
+      <div class="verdict">
+        <canvas class="ring" id="ring" width="224" height="224" aria-label="Score global"></canvas>
+        <div class="kpis">
+          <div class="kpi"><div class="label">Balle (est.)</div><div class="v" id="kBall">—</div><div class="est">± 20 % sans radar</div></div>
+          <div class="kpi"><div class="label">Raquette (est.)</div><div class="v" id="kRacket">—</div><div class="est">tête de raquette</div></div>
+          <div class="kpi"><div class="label">Poignet</div><div class="v" id="kWrist">—</div><div class="est">relatif au bassin</div></div>
+          <div class="kpi"><div class="label">Chaîne</div><div class="v" id="kChain">—</div><div class="est">ordre des pics</div></div>
+        </div>
+      </div>
+      <div class="simple-only">
+        <div class="label" style="margin-top:18px">Les 3 corrections prioritaires</div>
+        <div class="fixes" id="fixes"></div>
+      </div>
+      <div class="adv-only" style="margin-top:16px">
+        <div class="scroll"><table id="mtable"><thead><tr><th>Mesure</th><th>Valeur</th><th>Cible</th><th>Score</th></tr></thead><tbody></tbody></table></div>
+        <div class="fixes" id="fixesAdv"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="panel">
+      <div class="ph"><h2>Chaîne cinétique</h2><span class="label">pics de vitesse avant l'impact</span></div>
+      <div class="chain" id="chain"></div>
+      <div class="gaps" id="gaps"></div>
+      <p class="note" style="margin:10px 0 0">Un geste efficace se transmet du sol vers la raquette : chaque segment atteint sa vitesse maximale juste après le précédent. Écart cible entre deux pics : 15 à 90 ms.</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Optimiseur</h2><span class="label">simulation Monte-Carlo</span></div>
+      <div class="transport" style="margin-top:0">
+        <button class="btn primary" id="simBtn">Lancer la simulation</button>
+        <div class="seg adv-only" role="group" aria-label="Nombre d'essais" id="trialsSeg" style="display:none">
+          <button data-n="1000000" aria-pressed="false">1 M</button>
+          <button data-n="5000000" aria-pressed="true">5 M</button>
+          <button data-n="20000000" aria-pressed="false">20 M</button>
+        </div>
+        <span class="progress" id="simProg"><i></i></span>
+      </div>
+      <div class="sim-out" id="simOut"><p class="note">Le moteur fait varier ta flexion, ta torsion, ton extension, ton point de contact et le timing de chaque segment, élimine les combinaisons à risque pour le dos et l'épaule, et garde le meilleur compromis gain / effort.</p></div>
+    </div>
+  </section>
+
+  <section class="row adv-only" style="display:none" id="advRow">
+    <div class="panel">
+      <div class="ph"><h2>Vitesses segmentaires</h2><span class="label">normalisées au pic</span></div>
+      <canvas class="chart" id="chartV"></canvas>
+      <div class="legend"><span style="--c:var(--pelvis)">Bassin °/s</span><span style="--c:var(--thorax)">Buste °/s</span><span style="--c:var(--elbow)">Extension coude °/s</span><span style="--c:var(--wrist)">Poignet m/s</span></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Squelette 3D</h2><span class="label">glisser pour tourner</span></div>
+      <canvas class="view3d" id="view3d"></canvas>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Angles articulaires</h2><span class="label">degrés</span></div>
+      <canvas class="chart" id="chartA"></canvas>
+      <div class="legend"><span style="--c:var(--accent)">Coude</span><span style="--c:var(--signal)">Genou avant (flexion)</span><span style="--c:var(--pelvis)">Séparation hanches / épaules</span></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Données brutes</h2><span class="label" id="rawInfo"></span></div>
+      <p class="note" style="margin-top:0">Toutes les séries image par image (positions 3D, angles, vitesses) au format JSON, pour les comparer d'une séance à l'autre ou les passer dans un autre outil.</p>
+      <button class="btn" id="copyJson">Copier le JSON</button> <span class="status" id="copyMsg" style="display:inline-flex"></span>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="panel">
+      <div class="ph"><h2>Exercices de la semaine</h2><span class="label">liés aux écarts mesurés</span></div>
+      <div class="cards" id="ex"></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>Prochaine prise demandée</h2><span class="label">pour mesurer ce qui manque</span></div>
+      <div class="cards" id="cam"></div>
+    </div>
+  </section>
+
+  <p class="note">Prototype v0.1. La pose est estimée image par image dans le navigateur (aucune vidéo n'est envoyée). Les vitesses de raquette et de balle sont des estimations à partir du bras ; elles seront calibrées au radar. Plages de référence indicatives, tirées de la littérature biomécanique du tennis. Avec une seule caméra, les angles hors du plan de la caméra sont moins fiables : ajoute une seconde vue.</p>
+</main>
+
+<script type="module">
+import { analyze, detectStrokes, BONES, LM, SIM_SOURCE } from './core/engine.js';
+import { makeDemoServe } from './core/demo.js';
+
+const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const STROKE_FR = { serve: 'Service', forehand: 'Coup droit', backhand: 'Revers' };
+const state = {
+  mode: 'simple', stroke: 'serve', hand: 'right', source: 'demo',
+  allFrames: [], frames: [], res: null, cur: 0, playing: false, speed: 0.25, clock: 0,
+  strokes: [], strokeIdx: 0, trials: 5000000, sim: null, yaw: -0.7, pitch: 0.25,
+};
+
+// ---------- Mode ----------
+function setMode(m) {
+  state.mode = m;
+  document.body.classList.toggle('adv', m === 'adv');
+  $('#m-simple').setAttribute('aria-pressed', m === 'simple');
+  $('#m-adv').setAttribute('aria-pressed', m === 'adv');
+  $('#advRow').style.display = m === 'adv' ? 'grid' : 'none';
+  $('#trialsSeg').style.display = m === 'adv' ? 'inline-flex' : 'none';
+  try { localStorage.setItem('kyron-mode', m); } catch (e) {}
+  requestAnimationFrame(() => { drawCharts(); draw3D(); });
+}
+$('#m-simple').onclick = () => setMode('simple');
+$('#m-adv').onclick = () => setMode('adv');
+
+function segGroup(sel, attr, cb) {
+  const g = $(sel);
+  g.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    g.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    cb(b.dataset[attr]);
+  });
+}
+segGroup('#strokeSeg', 'stroke', (v) => { state.stroke = v; reanalyze(); });
+segGroup('#handSeg', 'hand', (v) => { state.hand = v; if (state.source === 'video') rebuildStrokes(); else reanalyze(); });
+segGroup('#speedSeg', 'sp', (v) => { state.speed = +v; if (!$('#video').hidden) $('#video').playbackRate = Math.max(0.0625, +v); });
+segGroup('#trialsSeg', 'n', (v) => { state.trials = +v; });
+
+function status(text, p) {
+  $('#statusText').textContent = text;
+  $('#prog').hidden = p == null;
+  if (p != null) $('#prog i').style.width = `${Math.round(p * 100)}%`;
+}
+
+// ---------- Analyse ----------
+function reanalyze() {
+  if (!state.frames.length) return;
+  try {
+    state.res = analyze(state.frames, { stroke: state.stroke, hand: state.hand, source: state.source });
+  } catch (e) { status(e.message); return; }
+  state.sim = null;
+  state.cur = state.res.impact;
+  state.clock = state.frames[state.cur].t;
+  if (!$('#video').hidden) seekVideo(state.frames[state.cur].t);
+  renderAll();
+}
+
+function renderAll() {
+  const r = state.res; if (!r) return;
+  const m = r.metrics;
+  $('#strokeLabel').textContent = `${STROKE_FR[r.stroke]} · ${r.hand === 'right' ? 'droitier' : 'gaucher'}`;
+  $('#kBall').innerHTML = `${Math.round(m.ballSpeedKmh)}<small>km/h</small>`;
+  $('#kRacket').innerHTML = `${Math.round(m.racketSpeed * 3.6)}<small>km/h</small>`;
+  $('#kWrist').innerHTML = `${m.wristSpeed.toFixed(1)}<small>m/s</small>`;
+  $('#kChain').innerHTML = r.inOrder ? `OK<small>${r.gaps.join('·')} ms</small>` : `<span style="color:var(--bad)">Désordre</span>`;
+  drawRing(r.score);
+
+  const sevLabel = ['OK', 'Finition', 'Important', 'Critique'];
+  const fixHtml = (f, i) => `<div class="fix"><div class="fix-h"><span class="pill s${f.sev}">${f.sev ? 'Priorité ' + (i + 1) : sevLabel[0]}</span><b>${f.title}</b>${f.gain ? `<span class="gain">≈ +${f.gain} % vitesse</span>` : ''}</div><p>${f.detail}</p></div>`;
+  $('#fixes').innerHTML = r.findings.slice(0, 3).map(fixHtml).join('');
+  $('#fixesAdv').innerHTML = r.findings.map(fixHtml).join('');
+
+  const fmt = (it) => it.key === 'sequence' ? `${it.value} ms` : it.key === 'contactRatio' ? `${it.value.toFixed(2)} ×` : it.key === 'headDrift' ? `${Math.round(it.value * 100)} cm` : `${Math.round(it.value)}°`;
+  const tgt = (it) => it.key === 'contactRatio' ? `${it.lo}–${it.hi} ×` : it.key === 'headDrift' ? `< ${Math.round(it.hi * 100)} cm` : it.key === 'sequence' ? `${it.lo}–${it.hi} ms` : `${it.lo}–${it.hi}°`;
+  const col = (s) => s >= 90 ? 'var(--good)' : s >= 60 ? 'var(--warn)' : 'var(--bad)';
+  $('#mtable tbody').innerHTML = r.items.map((it) => `<tr><td>${it.label}</td><td class="num">${fmt(it)}</td><td class="num" style="color:var(--muted)">${tgt(it)}</td><td><div class="bar-s"><i style="width:${it.score}%;background:${col(it.score)}"></i></div></td></tr>`).join('')
+    + `<tr><td>Vitesse angulaire bassin (pic)</td><td class="num">${Math.round(m.pelvisOmega)} °/s</td><td class="num" style="color:var(--muted)">—</td><td></td></tr>`
+    + `<tr><td>Vitesse angulaire buste (pic)</td><td class="num">${Math.round(m.thoraxOmega)} °/s</td><td class="num" style="color:var(--muted)">—</td><td></td></tr>`
+    + `<tr><td>Taille estimée</td><td class="num">${m.height.toFixed(2)} m</td><td class="num" style="color:var(--muted)">—</td><td></td></tr>`;
+
+  // Chaîne
+  const t0 = r.series.t[r.phases[1].i0], t1 = r.series.t[Math.min(r.n - 1, r.impact + Math.round(r.fps * 0.05))];
+  const pos = (t) => Math.max(0, Math.min(100, ((t - t0) / (t1 - t0)) * 100));
+  const colors = { pelvis: 'var(--pelvis)', thorax: 'var(--thorax)', elbow: 'var(--elbow)', wrist: 'var(--wrist)' };
+  const impPos = pos(r.series.t[r.impact]);
+  $('#chain').innerHTML = r.sequence.map((s) => `<div class="chain-row"><span>${s.label}</span><div class="lane"><span class="imp" style="left:${impPos}%"></span><i style="left:calc(${pos(s.t)}% - 1px);background:${colors[s.key]}"></i></div><span class="mono" style="text-align:right;color:var(--muted)">${s.ms} ms</span></div>`).join('');
+  const names = ['Bassin → buste', 'Buste → coude', 'Coude → poignet'];
+  $('#gaps').innerHTML = r.gaps.map((g, i) => `<span class="gapc ${g >= 15 && g <= 90 ? 'ok' : 'ko'}">${names[i]} ${g} ms</span>`).join('');
+
+  $('#ex').innerHTML = r.exercises.map((e) => `<div class="card"><b>${e.name}</b><p>${e.goal}</p><span class="meta">${e.dose}</span><p style="font-size:12px">Validé si : ${e.check}</p></div>`).join('');
+  $('#cam').innerHTML = r.camera.map((c, i) => `<div class="card"><span class="label">Prise ${i + 1}</span><b>${c.title}</b><p>${c.why}</p></div>`).join('');
+  $('#rawInfo').textContent = `${r.n} images · ${Math.round(r.fps)} i/s`;
+  renderSim();
+  drawTimeline(); drawCharts(); drawFrame();
+}
+
+function drawRing(score) {
+  const c = $('#ring'), g = c.getContext('2d'), W = c.width, cx = W / 2, R = W / 2 - 14;
+  g.clearRect(0, 0, W, W);
+  g.lineWidth = 12; g.lineCap = 'round';
+  g.strokeStyle = css('--line'); g.beginPath(); g.arc(cx, cx, R, 0.75 * Math.PI, 2.25 * Math.PI); g.stroke();
+  g.strokeStyle = score >= 85 ? css('--good') : score >= 65 ? css('--accent') : css('--warn');
+  g.beginPath(); g.arc(cx, cx, R, 0.75 * Math.PI, 0.75 * Math.PI + 1.5 * Math.PI * score / 100); g.stroke();
+  // graduations
+  g.strokeStyle = css('--line-2'); g.lineWidth = 2;
+  for (let i = 0; i <= 10; i++) { const a = 0.75 * Math.PI + 1.5 * Math.PI * i / 10; g.beginPath(); g.moveTo(cx + Math.cos(a) * (R - 16), cx + Math.sin(a) * (R - 16)); g.lineTo(cx + Math.cos(a) * (R - 22), cx + Math.sin(a) * (R - 22)); g.stroke(); }
+  g.fillStyle = css('--fg'); g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `700 54px ${css('--f-display')}`; g.fillText(score, cx, cx - 4);
+  g.fillStyle = css('--muted'); g.font = `500 17px ${css('--f-mono')}`; g.fillText('/ 100', cx, cx + 38);
+}
+
+// ---------- Simulation ----------
+let worker = null;
+$('#simBtn').onclick = () => {
+  if (!state.res) return;
+  if (worker) worker.terminate();
+  const N = state.mode === 'adv' ? state.trials : 2000000;
+  worker = new Worker(URL.createObjectURL(new Blob([SIM_SOURCE], { type: 'text/javascript' })));
+  $('#simBtn').disabled = true;
+  const t0 = performance.now();
+  worker.onmessage = (e) => {
+    const d = e.data;
+    if (!d.done) { $('#simProg i').style.width = `${d.progress * 100}%`; $('#simOut').innerHTML = `<div class="counter">${Math.round(d.progress * N).toLocaleString('fr-FR')} / ${N.toLocaleString('fr-FR')} essais…</div>`; return; }
+    $('#simProg i').style.width = '100%';
+    $('#simBtn').disabled = false;
+    state.sim = d; renderSim();
+  };
+  worker.onerror = (e) => { $('#simBtn').disabled = false; $('#simOut').innerHTML = `<p class="note">La simulation a échoué : ${e.message}</p>`; };
+  worker.postMessage({ input: state.res.simInput, trials: N });
+};
+
+function renderSim() {
+  const d = state.sim, r = state.res;
+  if (!d) { $('#simProg i').style.width = '0'; $('#simOut').innerHTML = `<p class="note">Le moteur fait varier ta flexion, ta torsion, ton extension, ton point de contact et le timing de chaque segment, élimine les combinaisons à risque pour le dos et l'épaule, et garde le meilleur compromis gain / effort.</p>`; return; }
+  const kmh = (v) => Math.round(v * (r.stroke === 'serve' ? 1.32 : 1.18) * 3.6);
+  const b = d.best, x = r.simInput;
+  const lab = { kneeFlex: 'Flexion des genoux', separation: 'Torsion hanches / épaules', elbowImpact: 'Extension du coude', contactRatio: 'Hauteur de contact', timing: 'Timing de la chaîne' };
+  const maxS = Math.max(...d.sens.map((s) => s.gainPct), 0.1);
+  const changes = [
+    ['Flexion des genoux', `${Math.round(x.kneeFlex)}° → ${Math.round(b.k)}°`],
+    ['Torsion hanches / épaules', `${Math.round(x.separation)}° → ${Math.round(b.s)}°`],
+    ['Coude à l’impact', `${Math.round(x.elbowImpact)}° → ${Math.round(b.e1)}°`],
+    ...(r.stroke === 'serve' ? [['Hauteur de contact', `${x.contactRatio.toFixed(2)} → ${b.c.toFixed(2)} × taille`]] : []),
+    ['Écarts de la chaîne', `${x.d1}/${x.d2}/${x.d3} → ${Math.round(b.d1)}/${Math.round(b.d2)}/${Math.round(b.d3)} ms`],
+  ];
+  $('#simOut').innerHTML = `
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end">
+      <div><div class="label">Potentiel balle</div><div class="big">${kmh(d.base)} → ${kmh(b.v)}<small>km/h</small></div></div>
+      <div><div class="label">Gain</div><div class="big" style="color:var(--good)">+${d.gainPct.toFixed(1)}<small>%</small></div></div>
+    </div>
+    <div class="counter">${d.trials.toLocaleString('fr-FR')} essais en ${(d.ms / 1000).toFixed(2)} s · ${d.rejected.toLocaleString('fr-FR')} écartés (risque lombaire ou genou)</div>
+    <div class="sens">${d.sens.sort((a, z) => z.gainPct - a.gainPct).map((s) => `<div class="sens-r"><span>${lab[s.key]}</span><span class="track"><i style="width:${Math.max(2, s.gainPct / maxS * 100)}%"></i></span><span class="mono" style="text-align:right">+${s.gainPct.toFixed(1)} %</span></div>`).join('')}</div>
+    <div class="adv-only scroll"><table><thead><tr><th>Paramètre</th><th>Actuel → optimal</th></tr></thead><tbody>${changes.map(([a, z]) => `<tr><td>${a}</td><td class="num">${z}</td></tr>`).join('')}</tbody></table></div>
+    <p class="note" style="margin:0">Modèle simplifié v0, calibré sur ta vitesse estimée. À valider au radar avant d'en tirer des conclusions fines.</p>`;
+}
+
+// ---------- Dessin : scène ----------
+const ov = $('#overlay'), og = ov.getContext('2d');
+function fitCanvas(c) {
+  const r = c.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  return { w, h, dpr };
+}
+function contentRect(w, h) {
+  const v = $('#video');
+  if (v.hidden || !v.videoWidth) { const s = Math.min(w, h * 1.6); return { x: (w - s) / 2, y: (h - s / 1.6) / 2, w: s, h: s / 1.6 }; }
+  const ar = v.videoWidth / v.videoHeight;
+  let cw = w, ch = w / ar; if (ch > h) { ch = h; cw = h * ar; }
+  return { x: (w - cw) / 2, y: (h - ch) / 2, w: cw, h: ch };
+}
+
+function frameAt(t) {
+  const f = state.frames; if (!f.length) return 0;
+  let lo = 0, hi = f.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (f[m].t < t) lo = m + 1; else hi = m; }
+  if (lo > 0 && Math.abs(f[lo - 1].t - t) < Math.abs(f[lo].t - t)) lo--;
+  return lo;
+}
+
+function phaseAt(i) {
+  const r = state.res; if (!r) return '—';
+  if (Math.abs(i - r.impact) <= 1) return 'Impact';
+  for (let k = r.phases.length - 1; k >= 0; k--) { const p = r.phases[k]; if (p.key !== 'impact' && i >= p.i0 && i <= p.i1) return p.label; }
+  return i < r.phases[0].i0 ? 'Attente' : 'Retour';
+}
+
+function drawFrame() {
+  const { w, h, dpr } = fitCanvas(ov);
+  og.clearRect(0, 0, w, h);
+  const f = state.frames[state.cur]; if (!f) return;
+  const cr = contentRect(w, h);
+  const P = (p) => [cr.x + p.x * cr.w, cr.y + p.y * cr.h];
+  const demo = state.source === 'demo';
+  if (demo) {
+    // sol en perspective + grille
+    og.strokeStyle = 'rgba(79,195,255,0.07)'; og.lineWidth = 1;
+    for (let i = 0; i <= 20; i++) { const x = cr.x + cr.w * i / 20; og.beginPath(); og.moveTo(x, cr.y); og.lineTo(x, cr.y + cr.h); og.stroke(); }
+    for (let i = 0; i <= 12; i++) { const y = cr.y + cr.h * i / 12; og.beginPath(); og.moveTo(cr.x, y); og.lineTo(cr.x + cr.w, y); og.stroke(); }
+    og.strokeStyle = 'rgba(230,235,241,0.35)'; og.beginPath(); og.moveTo(cr.x, cr.y + cr.h * 0.955); og.lineTo(cr.x + cr.w, cr.y + cr.h * 0.955); og.stroke();
+  } else {
+    og.fillStyle = 'rgba(4,5,7,0.25)'; og.fillRect(cr.x, cr.y, cr.w, cr.h);
+  }
+  const R = state.hand === 'right';
+  const hitSet = new Set(R ? [12, 14, 16, 20] : [11, 13, 15, 19]);
+  // traînée du poignet (300 ms)
+  const wi = R ? LM.rWr : LM.lWr, ii = R ? LM.rIdx : LM.lIdx, ei = R ? LM.rEl : LM.lEl;
+  const back = Math.round((state.res?.fps || 60) * 0.3);
+  for (let k = Math.max(1, state.cur - back); k <= state.cur; k++) {
+    const a = state.frames[k - 1], b = state.frames[k];
+    const tip = (fr) => { const e = fr.img[ei], wq = fr.img[wi]; const dx = wq.x - e.x, dy = wq.y - e.y; return { x: wq.x + dx * 2.1, y: wq.y + dy * 2.1 }; };
+    const al = (k - state.cur + back) / back;
+    og.strokeStyle = `rgba(255,181,71,${al * 0.9})`; og.lineWidth = 2 * dpr;
+    og.beginPath(); og.moveTo(...P(tip(a))); og.lineTo(...P(tip(b))); og.stroke();
+  }
+  // raquette (prolongement avant-bras)
+  const e = f.img[ei], wq = f.img[wi];
+  const tip = { x: wq.x + (wq.x - e.x) * 2.1, y: wq.y + (wq.y - e.y) * 2.1 };
+  og.strokeStyle = css('--signal'); og.lineWidth = 3 * dpr; og.beginPath(); og.moveTo(...P(wq)); og.lineTo(...P(tip)); og.stroke();
+  og.beginPath(); og.ellipse(...P(tip), 7 * dpr, 7 * dpr, 0, 0, Math.PI * 2); og.stroke();
+  // os
+  for (const [a, b] of BONES) {
+    const pa = f.img[a], pb = f.img[b]; if (!pa || !pb) continue;
+    const hit = hitSet.has(a) && hitSet.has(b);
+    og.strokeStyle = hit ? css('--accent') : 'rgba(230,235,241,0.82)';
+    og.globalAlpha = Math.min(1, ((pa.v ?? 1) + (pb.v ?? 1)) / 2 + 0.2);
+    og.lineWidth = (hit ? 4 : 3) * dpr; og.lineCap = 'round';
+    og.beginPath(); og.moveTo(...P(pa)); og.lineTo(...P(pb)); og.stroke();
+  }
+  og.globalAlpha = 1;
+  for (const k of [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
+    const p = f.img[k]; if (!p) continue;
+    og.fillStyle = css('--bg'); og.strokeStyle = hitSet.has(k) ? css('--accent') : css('--fg'); og.lineWidth = 2 * dpr;
+    og.beginPath(); og.arc(...P(p), 4 * dpr, 0, Math.PI * 2); og.fill(); og.stroke();
+  }
+  // HUD
+  const r = state.res, i = state.cur;
+  $('#hudT').textContent = `t = ${f.t.toFixed(3)} s · image ${i + 1}/${state.frames.length}`;
+  const ph = phaseAt(i);
+  $('#hudPhase').textContent = ph;
+  $('#hudPhase').style.color = ph === 'Impact' ? css('--signal') : css('--fg');
+  if (r && r.series) {
+    const kf = r.stroke === 'serve' ? (r.hand === 'right' ? r.series.kneeL : r.series.kneeR)[i] : Math.max(r.series.kneeL[i], r.series.kneeR[i]);
+    $('#hudA1').textContent = `genou ${Math.round(kf)}°`;
+    $('#hudA2').textContent = `coude ${Math.round(r.series.elbowAngle[i])}°`;
+    $('#hudA3').textContent = `poignet ${r.series.wristSpeed[i].toFixed(1)} m/s`;
+  }
+  drawTimelineHead();
+  if (state.mode === 'adv') { drawCharts(); draw3D(); }
+}
+
+// ---------- Frise ----------
+const tl = $('#timeline'), tg = tl.getContext('2d');
+let tlBase = null;
+function drawTimeline() {
+  const { w, h, dpr } = fitCanvas(tl);
+  tg.clearRect(0, 0, w, h);
+  const r = state.res, f = state.frames; if (!r || !f.length) return;
+  const T0 = f[0].t, T1 = f[f.length - 1].t, X = (t) => ((t - T0) / (T1 - T0)) * w;
+  tg.fillStyle = css('--panel-2'); tg.fillRect(0, 12 * dpr, w, 18 * dpr);
+  const pc = { prep: 'rgba(133,146,163,0.35)', load: 'rgba(169,139,255,0.55)', accel: 'rgba(79,195,255,0.65)', follow: 'rgba(61,220,151,0.4)' };
+  for (const p of r.phases) {
+    if (p.key === 'impact') continue;
+    tg.fillStyle = pc[p.key]; const x0 = X(f[p.i0].t), x1 = X(f[p.i1].t);
+    tg.fillRect(x0, 12 * dpr, Math.max(1, x1 - x0), 18 * dpr);
+  }
+  tg.font = `${10 * dpr}px ${css('--f-mono')}`; tg.fillStyle = css('--muted'); tg.textBaseline = 'top';
+  const short = { prep: 'PRÉPA', load: 'ARMÉ', accel: 'ACCÉL', follow: 'ACCOMP.' };
+  for (const p of r.phases) { if (short[p.key]) { const x0 = X(f[p.i0].t), x1 = X(f[p.i1].t); if (x1 - x0 > 40 * dpr) tg.fillText(short[p.key], x0 + 4 * dpr, 34 * dpr); } }
+  const xi = X(f[r.impact].t);
+  tg.fillStyle = css('--signal'); tg.fillRect(xi - 1 * dpr, 6 * dpr, 2 * dpr, 30 * dpr);
+  tg.fillText('IMPACT', Math.min(w - 50 * dpr, xi + 4 * dpr), 0);
+  tlBase = tg.getImageData(0, 0, w, h);
+  drawTimelineHead();
+}
+function drawTimelineHead() {
+  if (!tlBase || !state.frames.length) return;
+  const w = tl.width, h = tl.height, dpr = w / tl.getBoundingClientRect().width;
+  if (tlBase.width !== w || tlBase.height !== h) return drawTimeline();
+  tg.putImageData(tlBase, 0, 0);
+  const f = state.frames, x = ((f[state.cur].t - f[0].t) / (f[f.length - 1].t - f[0].t)) * w;
+  tg.fillStyle = css('--fg'); tg.fillRect(x - 1, 8 * dpr, 2, 26 * dpr);
+  tg.beginPath(); tg.moveTo(x - 5 * dpr, 6 * dpr); tg.lineTo(x + 5 * dpr, 6 * dpr); tg.lineTo(x, 12 * dpr); tg.fill();
+}
+function seekFromEvent(ev) {
+  const rc = tl.getBoundingClientRect(), f = state.frames; if (!f.length) return;
+  const u = Math.max(0, Math.min(1, (ev.clientX - rc.left) / rc.width));
+  setCur(frameAt(f[0].t + u * (f[f.length - 1].t - f[0].t)));
+}
+tl.addEventListener('pointerdown', (e) => { stop(); tl.setPointerCapture(e.pointerId); seekFromEvent(e); });
+tl.addEventListener('pointermove', (e) => { if (e.buttons) seekFromEvent(e); });
+
+// ---------- Graphiques ----------
+function drawChart(c, lines, opts = {}) {
+  const { w, h, dpr } = fitCanvas(c); const g = c.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const r = state.res; if (!r) return;
+  const pad = { l: 34 * dpr, r: 8 * dpr, t: 8 * dpr, b: 20 * dpr };
+  const i0 = Math.max(0, r.phases[0].i0), i1 = Math.min(r.n - 1, r.phases[4].i1);
+  const t = r.series.t, X = (i) => pad.l + ((t[i] - t[i0]) / (t[i1] - t[i0])) * (w - pad.l - pad.r);
+  const lo = opts.lo ?? 0, hi = opts.hi ?? 1, Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (h - pad.t - pad.b);
+  g.strokeStyle = css('--line'); g.lineWidth = 1; g.fillStyle = css('--dim'); g.font = `${10 * dpr}px ${css('--f-mono')}`;
+  g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (const v of opts.ticks || [0, 0.5, 1]) { const y = Y(v); g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke(); g.fillText(opts.fmt ? opts.fmt(v) : `${Math.round(v * 100)}%`, pad.l - 6 * dpr, y); }
+  g.textAlign = 'left'; g.textBaseline = 'top';
+  g.fillText(`${((t[i1] - t[i0]) * 1000).toFixed(0)} ms`, w - pad.r - 50 * dpr, h - pad.b + 6 * dpr);
+  // impact
+  g.strokeStyle = css('--signal'); g.setLineDash([4 * dpr, 4 * dpr]); g.beginPath(); g.moveTo(X(r.impact), pad.t); g.lineTo(X(r.impact), h - pad.b); g.stroke(); g.setLineDash([]);
+  for (const L of lines) {
+    const s = L.data; const k = L.norm ? Math.max(...s.slice(i0, i1 + 1).map(Math.abs)) || 1 : 1;
+    g.strokeStyle = L.color; g.lineWidth = 2 * dpr; g.beginPath();
+    for (let i = i0; i <= i1; i++) { const x = X(i), y = Y(s[i] / k); i === i0 ? g.moveTo(x, y) : g.lineTo(x, y); }
+    g.stroke();
+    if (L.peak != null) { g.fillStyle = L.color; g.beginPath(); g.arc(X(L.peak), Y(s[L.peak] / k), 4 * dpr, 0, Math.PI * 2); g.fill(); }
+  }
+  // tête de lecture
+  if (state.cur >= i0 && state.cur <= i1) { g.strokeStyle = css('--fg'); g.globalAlpha = 0.6; g.beginPath(); g.moveTo(X(state.cur), pad.t); g.lineTo(X(state.cur), h - pad.b); g.stroke(); g.globalAlpha = 1; }
+}
+function drawCharts() {
+  if (state.mode !== 'adv' || !state.res) return;
+  const r = state.res, s = r.series, sq = Object.fromEntries(r.sequence.map((x) => [x.key, x.idx]));
+  drawChart($('#chartV'), [
+    { data: s.pelvisOmega, color: css('--pelvis'), norm: true, peak: sq.pelvis },
+    { data: s.thoraxOmega, color: css('--thorax'), norm: true, peak: sq.thorax },
+    { data: s.elbowVel.map((v) => Math.max(0, v)), color: css('--elbow'), norm: true, peak: sq.elbow },
+    { data: s.wristSpeed, color: css('--wrist'), norm: true, peak: sq.wrist },
+  ]);
+  const knee = r.stroke === 'serve' ? (r.hand === 'right' ? s.kneeL : s.kneeR) : s.kneeL.map((v, i) => Math.max(v, s.kneeR[i]));
+  drawChart($('#chartA'), [
+    { data: s.elbowAngle, color: css('--accent') },
+    { data: knee, color: css('--signal') },
+    { data: s.separation.map(Math.abs), color: css('--pelvis') },
+  ], { lo: 0, hi: 180, ticks: [0, 45, 90, 135, 180], fmt: (v) => `${v}°` });
+}
+
+// ---------- Vue 3D ----------
+const v3 = $('#view3d');
+let drag = null;
+v3.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, yaw: state.yaw, pitch: state.pitch }; v3.setPointerCapture(e.pointerId); v3.style.cursor = 'grabbing'; });
+v3.addEventListener('pointermove', (e) => { if (!drag) return; state.yaw = drag.yaw + (e.clientX - drag.x) * 0.01; state.pitch = Math.max(-0.2, Math.min(1.2, drag.pitch + (e.clientY - drag.y) * 0.01)); draw3D(); });
+v3.addEventListener('pointerup', () => { drag = null; v3.style.cursor = 'grab'; });
+function draw3D() {
+  if (state.mode !== 'adv') return;
+  const { w, h, dpr } = fitCanvas(v3); const g = v3.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const f = state.frames[state.cur]; if (!f) return;
+  const r = state.res; const R = state.hand === 'right';
+  const ankles = [f.world[27], f.world[28]]; const gy = Math.min(ankles[0].y, ankles[1].y) - 0.08;
+  const cy = Math.cos(state.yaw), sy = Math.sin(state.yaw), cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
+  const S = Math.min(w, h) / 2.6;
+  const pr = (p) => { const x = p.x * cy - p.z * sy, z = p.x * sy + p.z * cy, y = p.y - gy - 0.9; const y2 = y * cp - z * sp, z2 = y * sp + z * cp; const k = 3.2 / (3.2 + z2); return [w / 2 + x * S * k, h * 0.55 - y2 * S * k, z2]; };
+  g.strokeStyle = 'rgba(79,195,255,0.12)'; g.lineWidth = 1;
+  for (let i = -5; i <= 5; i++) {
+    const a = pr({ x: i * 0.25, y: gy, z: -1.25 }), b = pr({ x: i * 0.25, y: gy, z: 1.25 });
+    const c = pr({ x: -1.25, y: gy, z: i * 0.25 }), d = pr({ x: 1.25, y: gy, z: i * 0.25 });
+    g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.moveTo(c[0], c[1]); g.lineTo(d[0], d[1]); g.stroke();
+  }
+  const hitSet = new Set(R ? [12, 14, 16, 20] : [11, 13, 15, 19]);
+  // trajectoire du poignet sur tout le geste
+  if (r) {
+    g.strokeStyle = 'rgba(255,181,71,0.5)'; g.lineWidth = 1.5 * dpr; g.beginPath();
+    const wi = R ? 16 : 15;
+    for (let i = r.phases[0].i0; i <= r.phases[4].i1; i++) { const q = state.frames[i].world[wi]; const p = pr({ x: q.x + (state.frames[i].world[23].x + state.frames[i].world[24].x) / 2 * 0, y: q.y, z: q.z }); i === r.phases[0].i0 ? g.moveTo(p[0], p[1]) : g.lineTo(p[0], p[1]); }
+    g.stroke();
+  }
+  for (const [a, b] of BONES) {
+    const A = pr(f.world[a]), B = pr(f.world[b]);
+    g.strokeStyle = hitSet.has(a) && hitSet.has(b) ? css('--accent') : 'rgba(230,235,241,0.85)';
+    g.lineWidth = 3 * dpr; g.lineCap = 'round'; g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.stroke();
+  }
+  // axes bassin / épaules (séparation)
+  const line = (i, j, col) => { const A = pr(f.world[i]), B = pr(f.world[j]); g.strokeStyle = col; g.lineWidth = 1.5 * dpr; g.setLineDash([3 * dpr, 3 * dpr]); g.beginPath(); const dx = B[0] - A[0], dy = B[1] - A[1]; g.moveTo(A[0] - dx * 0.5, A[1] - dy * 0.5); g.lineTo(B[0] + dx * 0.5, B[1] + dy * 0.5); g.stroke(); g.setLineDash([]); };
+  line(23, 24, css('--pelvis')); line(11, 12, css('--thorax'));
+  if (r) { g.fillStyle = css('--muted'); g.font = `${11 * dpr}px ${css('--f-mono')}`; g.fillText(`séparation ${Math.round(Math.abs(r.series.separation[state.cur]))}°`, 10 * dpr, 18 * dpr); }
+}
+
+// ---------- Lecture ----------
+function setCur(i) {
+  state.cur = Math.max(0, Math.min(state.frames.length - 1, i));
+  state.clock = state.frames[state.cur]?.t || 0;
+  if (!$('#video').hidden) seekVideo(state.clock);
+  drawFrame();
+}
+function stop() { state.playing = false; $('#play').textContent = '▶ Lecture'; const v = $('#video'); if (!v.hidden) v.pause(); }
+$('#play').onclick = () => {
+  if (state.playing) return stop();
+  if (!state.frames.length) return;
+  state.playing = true; $('#play').textContent = '❚❚ Pause';
+  if (state.cur >= state.frames.length - 1) setCur(0);
+  const v = $('#video');
+  if (!v.hidden) { v.playbackRate = Math.max(0.0625, state.speed); v.play().catch(() => {}); }
+  let last = performance.now();
+  const tick = (now) => {
+    if (!state.playing) return;
+    if (!v.hidden) { state.clock = v.currentTime; if (v.ended || state.clock >= state.frames[state.frames.length - 1].t) { stop(); } }
+    else { state.clock += (now - last) / 1000 * state.speed; if (state.clock >= state.frames[state.frames.length - 1].t) { state.clock = state.frames[state.frames.length - 1].t; stop(); } }
+    last = now;
+    state.cur = frameAt(state.clock); drawFrame();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+$('#prev').onclick = () => { stop(); setCur(state.cur - 1); };
+$('#next').onclick = () => { stop(); setCur(state.cur + 1); };
+$('#toImpact').onclick = () => { stop(); if (state.res) setCur(state.res.impact); };
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input')) return;
+  if (e.key === 'ArrowLeft') { stop(); setCur(state.cur - 1); }
+  else if (e.key === 'ArrowRight') { stop(); setCur(state.cur + 1); }
+  else if (e.key === ' ' && e.target === document.body) { e.preventDefault(); $('#play').click(); }
+});
+function seekVideo(t) { const v = $('#video'); if (Math.abs(v.currentTime - t) > 0.004) v.currentTime = t; }
+
+// ---------- Démo ----------
+function loadDemo() {
+  stop();
+  const v = $('#video'); v.hidden = true; v.removeAttribute('src');
+  state.source = 'demo';
+  state.allFrames = makeDemoServe();
+  state.frames = state.allFrames; state.strokes = []; $('#strokes').innerHTML = '';
+  // Le service démo : force « Service » + droitier
+  state.stroke = 'serve'; state.hand = 'right';
+  document.querySelectorAll('#strokeSeg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.stroke === 'serve'));
+  document.querySelectorAll('#handSeg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.hand === 'right'));
+  $('#srcLabel').textContent = 'Source : démo synthétique · 120 i/s';
+  status("Démo chargée : service synthétique d'un joueur droitier, 120 i/s.");
+  reanalyze();
+}
+$('#demoBtn').onclick = loadDemo;
+
+// ---------- Vidéo réelle ----------
+let landmarker = null;
+async function getLandmarker() {
+  if (landmarker) return landmarker;
+  status('Chargement du modèle de pose (≈ 9 Mo, une seule fois)…', 0.05);
+  const vision = await import('./lib/vision_bundle.mjs');
+  const base = new URL('./wasm', location.href).href;
+  const fileset = await vision.FilesetResolver.forVisionTasks(base);
+  const modelAssetPath = new URL('./models/pose_model.wasm', location.href).href;
+  const mk = (delegate) => vision.PoseLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath, delegate }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  try { landmarker = await mk('GPU'); } catch (e) { landmarker = await mk('CPU'); }
+  return landmarker;
+}
+
+$('#file').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0]; if (!file) return;
+  e.target.value = '';
+  stop();
+  const v = $('#video');
+  v.src = URL.createObjectURL(file); v.hidden = false;
+  await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('format vidéo non lu par ce navigateur')); }).catch((err) => { status(`Impossible de lire la vidéo : ${err.message}. Essaie un .mp4 ou .mov (H.264).`); throw err; });
+  $('#srcLabel').textContent = `Source : ${file.name}`;
+  $('#demoBtn').disabled = true; $('#fileLbl').style.pointerEvents = 'none';
+  try {
+    const lm = await getLandmarker();
+    const dur = Math.min(v.duration, 20);
+    const rate = state.mode === 'adv' ? 120 : 60;
+    const step = 1 / rate, frames = [];
+    let ts = 0;
+    for (let t = 0; t < dur; t += step) {
+      await new Promise((res) => { v.onseeked = res; v.currentTime = t; });
+      const out = lm.detectForVideo(v, ++ts * 1000 / rate);
+      if (out.landmarks?.length && out.worldLandmarks?.length) {
+        frames.push({
+          t,
+          img: out.landmarks[0].map((p) => ({ x: p.x, y: p.y, v: p.visibility ?? 1 })),
+          world: out.worldLandmarks[0].map((p) => ({ x: p.x, y: -p.y, z: -p.z })),
+        });
+      }
+      if (frames.length % 5 === 0) status(`Analyse image par image : ${Math.round(t * 10) / 10} / ${dur.toFixed(1)} s · ${frames.length} poses`, t / dur);
+    }
+    if (frames.length < 20) throw new Error("aucun joueur détecté sur assez d'images. Cadre le joueur en entier, bien éclairé.");
+    state.source = 'video'; state.allFrames = frames;
+    rebuildStrokes();
+    status(`${frames.length} poses extraites à ${rate} i/s${v.duration > 20 ? ' (20 premières secondes)' : ''}. ${state.strokes.length} frappe${state.strokes.length > 1 ? 's' : ''} détectée${state.strokes.length > 1 ? 's' : ''}.`);
+  } catch (err) {
+    console.error(err);
+    status(`Analyse interrompue : ${err.message}`);
+  } finally {
+    $('#demoBtn').disabled = false; $('#fileLbl').style.pointerEvents = '';
+  }
+});
+
+function rebuildStrokes() {
+  const all = state.allFrames;
+  state.strokes = detectStrokes(all, state.hand);
+  if (!state.strokes.length) state.strokes = [{ idx: Math.floor(all.length / 2), t: all[Math.floor(all.length / 2)].t }];
+  $('#strokes').innerHTML = state.strokes.length > 1 ? state.strokes.map((s, i) => `<button class="chip" data-i="${i}" aria-pressed="${i === 0}">Frappe ${i + 1} · ${s.t.toFixed(1)} s</button>`).join('') : '';
+  pickStroke(0);
+}
+$('#strokes').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  $('#strokes').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+  pickStroke(+b.dataset.i);
+});
+function pickStroke(i) {
+  state.strokeIdx = i;
+  const s = state.strokes[i], all = state.allFrames;
+  const before = state.stroke === 'serve' ? 1.8 : 1.3;
+  state.frames = all.filter((f) => f.t >= s.t - before && f.t <= s.t + 0.7);
+  reanalyze();
+}
+
+// ---------- Export ----------
+$('#copyJson').onclick = async () => {
+  if (!state.res) return;
+  const r = state.res;
+  const data = JSON.stringify({ stroke: r.stroke, hand: r.hand, fps: r.fps, score: r.score, metrics: r.metrics, sequence: r.sequence, phases: r.phases, findings: r.findings, series: r.series, frames: state.frames.map((f) => ({ t: f.t, world: f.world.map((p) => [+p.x.toFixed(4), +p.y.toFixed(4), +p.z.toFixed(4)]) })) });
+  try { await navigator.clipboard.writeText(data); $('#copyMsg').textContent = `Copié (${Math.round(data.length / 1024)} Ko)`; }
+  catch (e) { $('#copyMsg').textContent = 'Copie refusée par le navigateur.'; }
+};
+
+window.addEventListener('resize', () => { drawRing(state.res?.score ?? 0); drawTimeline(); drawFrame(); });
+
+let initMode = 'simple';
+try { initMode = localStorage.getItem('kyron-mode') || 'simple'; } catch (e) {}
+setMode(initMode === 'adv' ? 'adv' : 'simple');
+loadDemo();
+</script>
