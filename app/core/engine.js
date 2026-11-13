@@ -399,6 +399,18 @@ export function analyze(frames, opts = {}) {
   // ---------- Ajouts V1 : épaule 3 axes, centre de masse, équilibre, lancer, confiance ----------
   const ext = extendedAnalysis({ frames, opts, t, fps, n, R, stroke, impact, from, to, prep, loadIdx, accel, P, lHip, rHip, lSh, rSh, lAn, rAn, sh, el, wr, nose, groundY, height });
   Object.assign(metrics, ext.metrics);
+  // Hauteur de contact rapportée au SOL (et non plus aux chevilles) quand le saut est mesurable dans l'image :
+  // un serveur qui décolle de 20 cm frappe 20 cm plus haut que ne le dit la position poignet − chevilles.
+  // L'ancienne valeur reste disponible (contactRatioFeet) ; res.contactRef dit la référence utilisée.
+  let contactRef = null;
+  if (stroke === 'serve') {
+    metrics.contactRatioFeet = contactRatio;
+    contactRef = 'feet';
+    if (ext.imgRef && Number.isFinite(metrics.jumpHeight)) {
+      metrics.contactRatio = contactRatio + metrics.jumpHeight / height;
+      contactRef = 'ground';
+    }
+  }
 
   // Score et constats
   const refs = REFS[stroke];
@@ -433,6 +445,7 @@ export function analyze(frames, opts = {}) {
     confidenceParts: ext.confidenceParts,
     toss: ext.toss,
     imgRef: ext.imgRef,
+    contactRef,
   };
 }
 

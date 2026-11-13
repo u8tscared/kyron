@@ -16,6 +16,13 @@ const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] 
 const addv = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
 const lerpv = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
 const D2R = Math.PI / 180;
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+// Rotation de v d'un angle a (rad) autour de l'axe unitaire k (Rodrigues).
+const rotv = (v, k, a) => {
+  const c = Math.cos(a), s = Math.sin(a), kv = cross3(k, v), kd = dot3(k, v) * (1 - c);
+  return [v[0] * c + kv[0] * s + k[0] * kd, v[1] * c + kv[1] * s + k[1] * kd, v[2] * c + kv[2] * s + k[2] * kd];
+};
 
 function catmull(keys, t) {
   // keys: [{t, v:[x,y,z]}]
@@ -57,8 +64,6 @@ function pose(s) {
   const yawF = (deg) => { const r = deg * D2R; return { F: [Math.sin(r), 0, Math.cos(r)], R: [-Math.cos(r), 0, Math.sin(r)] }; };
   const pv = yawF(s.pelvisYaw), tv = yawF(s.thoraxYaw);
   const up = [0, 1, 0];
-  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   // Axe du tronc incliné (tiltX vers +x, tiltZ vers le filet, en degrés) ; le thorax tourne autour de cet axe,
   // comme une colonne vertébrale, ce qui garde la tête stable pendant la rotation.
   const Ut = norm([Math.tan(s.tiltX * D2R), 1, Math.tan(s.tiltZ * D2R)]);
@@ -101,7 +106,7 @@ function pose(s) {
   const nose = addv(addv(shC, Ut, 0.2), Fh, 0.1);
   const ear = (k) => addv(addv(shC, Ut, 0.21), Rh, 0.07 * k);
   const arm = (sh, upK, foK, lat) => {
-    const u = toT(evalDir(upK, s.t)), f = toT(evalDir(foK, s.t));
+    const u = toT(dirAt(upK, s.t)), f = toT(dirAt(foK, s.t));
     const e = addv(sh, u, SEG.upper), w = addv(e, f, SEG.fore);
     const side3 = norm([u[1] * f[2] - u[2] * f[1], u[2] * f[0] - u[0] * f[2], u[0] * f[1] - u[1] * f[0]]);
     return { e, w, idx: addv(addv(w, f, 0.09), side3, 0.02 * lat), pinky: addv(addv(w, f, 0.08), side3, -0.03 * lat), thumb: addv(w, f, 0.05) };
@@ -120,13 +125,76 @@ function pose(s) {
   return { P, hipC };
 }
 
+// Direction-clé : spécification (évaluée à t) ou vecteur déjà évalué.
+const dirAt = (k, t) => (typeof k[0] === 'number' ? k : evalDir(k, t));
+
+// État numérique à l'instant t : directions des bras évaluées, champs scalaires/vecteurs à plat.
+const NUM_KEYS = ['pelvisYaw', 'thoraxYaw', 'tiltX', 'tiltZ', 'headYaw', 'flex', 'jump'];
+function evalState(state, t) {
+  const s = state(t);
+  return { ...s, hip: s.hip.slice(),
+    armR: { upper: dirAt(s.armR.upper, t), fore: dirAt(s.armR.fore, t) },
+    armL: { upper: dirAt(s.armL.upper, t), fore: dirAt(s.armL.fore, t) } };
+}
+// Accompagnement physiologique après l'impact (t0) : chaque paramètre p garde sa vitesse d'impact v0 puis
+// décélère exponentiellement (constante T) tout en rejoignant, par un raccord C¹ en smoothstep, la pose
+// prévue à t0 + R ; au-delà, le geste d'origine reprend. Avant t0 rien ne change (métriques à l'impact
+// inchangées). Sans cela, le poignet passait de ~16 à ~2 m/s en ~30 ms, d'où des moments articulaires
+// irréalistes en dynamique inverse.
+function followThrough(state, { t0, T = 0.2, Ta = 0.1, R = 0.5 }) {
+  const h = 1e-4, a = evalState(state, t0), am = evalState(state, t0 - h), b = evalState(state, t0 + R);
+  const eR = T * (1 - Math.exp(-R / T)), eRa = Ta * (1 - Math.exp(-R / Ta));
+  // Scalaires (angles du tronc, flexion, saut, bassin) : extrapolation amortie + raccord.
+  const scal = (s) => [...NUM_KEYS.map((k) => s[k] ?? 0), ...s.hip];
+  const p0 = scal(a), v0 = scal(am).map((x, i) => (p0[i] - x) / h), pR = scal(b);
+  // Directions des bras : même loi, mais en rotation (axe et vitesse angulaire à l'impact), sinon
+  // l'extrapolation linéaire d'un vecteur unitaire ralentit d'elle-même.
+  const DIRS = [['armR', 'upper'], ['armR', 'fore'], ['armL', 'upper'], ['armL', 'fore']];
+  const dirs = DIRS.map(([s1, s2]) => {
+    const d0 = norm(a[s1][s2]), dm = norm(am[s1][s2]);
+    const w = cross3(dm, d0), sw = Math.hypot(...w), om = Math.asin(Math.min(1, sw)) / h; // rad/s
+    const ax = sw > 1e-12 ? norm(w) : [1, 0, 0];
+    const dA = rotv(d0, ax, om * eRa), dR = norm(b[s1][s2]);
+    const c = cross3(dA, dR), sc = Math.hypot(...c);
+    return { d0, ax, om, cax: sc > 1e-12 ? norm(c) : [1, 0, 0], cang: Math.atan2(sc, dot3(dA, dR)) };
+  });
+  return (t) => {
+    if (t <= t0 || t >= t0 + R) return evalState(state, t);
+    const u = t - t0, x = u / R, S = x * x * (3 - 2 * x), e = T * (1 - Math.exp(-u / T)), ea = Ta * (1 - Math.exp(-u / Ta));
+    const q = p0.map((p, i) => p + v0[i] * e + (pR[i] - p - v0[i] * eR) * S);
+    const s = { ...state(t), armR: {}, armL: {} };
+    NUM_KEYS.forEach((k, i) => { if (k in s) s[k] = q[i]; });
+    s.hip = q.slice(NUM_KEYS.length, NUM_KEYS.length + 2);
+    DIRS.forEach(([s1, s2], i) => {
+      const D = dirs[i];
+      s[s1][s2] = rotv(rotv(D.d0, D.ax, D.om * ea), D.cax, D.cang * S);
+    });
+    return s;
+  };
+}
+
+// Instant du pic de vitesse du poignet droit (frappe) dans [from, to], au 1/2000 s : c'est l'impact que
+// détecte engine.js, donc le point de départ naturel de l'accompagnement.
+function wristPeak(state, { from, to }) {
+  const dt = 1 / 2000, at = (t) => pose({ t, ...evalState(state, t) }).P[16];
+  let best = from, vmax = -1, prev = at(from);
+  for (let t = from + dt; t <= to; t += dt) {
+    const q = at(t), v = Math.hypot(q[0] - prev[0], q[1] - prev[1], q[2] - prev[2]);
+    if (v > vmax) { vmax = v; best = t - dt / 2; }
+    prev = q;
+  }
+  return best;
+}
+
 // Échantillonne un geste à 120 i/s. state(t) → état du corps ; camera : projection de profil.
-function sample(T, state, { fps = 120, seed = 7, noise = 0.003, camX = 0.5 } = {}) {
+// post = { t0, T, R } : accompagnement adouci après l'impact (voir followThrough).
+function sample(T, state, { fps = 120, seed = 7, noise = 0.003, camX = 0.5, post = null } = {}) {
   const rnd = noiseGen(seed, noise);
+  const st = post ? followThrough(state, { ...post, t0: post.t0 === 'peak' ? wristPeak(state, post) : post.t0 }) : state;
   const frames = [];
   for (let i = 0; i <= Math.round(T * fps); i++) {
     const t = i / fps;
-    const { P, hipC } = pose({ t, ...state(t) });
+    const { P, hipC } = pose({ t, ...st(t) });
     const world = P.map((q) => ({ x: q[0] - hipC[0] + rnd(), y: q[1] - hipC[1] + rnd(), z: q[2] - hipC[2] + rnd() }));
     // Caméra fixe sur le côté droit du terrain : le filet (+z) part vers la gauche de l'image.
     const img = P.map((q) => ({ x: camX - q[2] * 0.2, y: 0.93 - q[1] * 0.3, v: 0.97 + rnd() * 3 }));
@@ -144,10 +212,10 @@ export function makeDemoServe(profile = {}) {
   const Ti = p.impactT;
   const armR = {
     upper: B([[0.2, -0.95, 0.25], [[0.15, -0.98, 0.1], 0.3, 0.06], [[0.6, -0.6, -0.5], 0.62, 0.07], [[0.95, 0.0, -0.3], 0.85, 0.05],
-      [[0.95, 0.25, -0.15], Ti - 0.12, 0.02], [[0.72, 0.68, 0.1], Ti - 0.04, 0.012], [[0.6, 0.3, 0.75], Ti + 0.08, 0.02],
+      [[0.95, 0.25, -0.15], Ti - 0.13, 0.03], [[0.72, 0.68, 0.1], Ti - 0.04, 0.018], [[0.6, 0.3, 0.75], Ti + 0.08, 0.02],
       [[-0.2, -0.6, 0.75], Ti + 0.2, 0.07], [[-0.1, -0.95, 0.3], 1.75, 0.06]]),
     fore: B([[0.1, -0.2, 0.98], [[0.05, -0.9, 0.4], 0.3, 0.06], [[0.5, -0.1, -0.85], 0.62, 0.07], [[0.15, 0.98, -0.1], 0.85, 0.05],
-      [[0.05, 0.1, -0.99], Ti - 0.12, 0.02], [[0.62, 0.78, 0.1], Ti - 0.055, 0.009], [[0.25, -0.3, 0.92], Ti + 0.08, 0.02],
+      [[0.05, 0.1, -0.99], Ti - 0.13, 0.03], [[0.62, 0.78, 0.1], Ti - 0.05, 0.014], [[0.25, -0.3, 0.92], Ti + 0.08, 0.02],
       [[-0.6, -0.6, 0.5], Ti + 0.2, 0.07], [[-0.3, -0.8, 0.5], 1.75, 0.06]]),
   };
   // Bras de lancer : monte vers le filet (côté gauche du thorax) puis s'arrête bras tendu → lâcher de balle
@@ -162,16 +230,19 @@ export function makeDemoServe(profile = {}) {
     pelvisYaw: -80 + 75 * sig(t, p.pelvisT, 0.045) + 25 * sig(t, Ti + 0.15, 0.08),
     thoraxYaw: -80 - p.sepAmp * sig(t, 0.75, 0.08) + (80 + p.sepAmp + 15) * sig(t, p.thoraxT, 0.04) + 30 * sig(t, Ti + 0.12, 0.06),
     // Tronc : recul à l'armé puis inclinaison vers la gauche (« épaule sur épaule ») et vers le terrain.
-    tiltZ: -12 * sig(t, 0.75, 0.08) + 20 * sig(t, 1.05, 0.04) + 17 * sig(t, Ti + 0.3, 0.1),
-    tiltX: 35 * sig(t, 1.02, 0.06) - 30 * sig(t, Ti + 0.3, 0.1),
+    tiltZ: -12 * sig(t, 0.75, 0.08) + 20 * sig(t, 1.03, 0.07) + 17 * sig(t, Ti + 0.3, 0.1),
+    tiltX: 35 * sig(t, 1.0, 0.08) - 30 * sig(t, Ti + 0.3, 0.1),
     headYaw: -40 + 40 * sig(t, Ti + 0.15, 0.08),
-    flex: p.kneeMax * sig(t, 0.62, 0.09) * (1 - sig(t, 1.08, 0.035)) + 4,
+    flex: p.kneeMax * sig(t, 0.62, 0.09) * (1 - sig(t, 1.08, 0.045)) + 4,
     // Le bassin avance vers le terrain pendant la poussée puis atterrit à l'intérieur.
-    hip: [0.06, -0.06 + 0.12 * sig(t, 0.75, 0.1) + 0.3 * sig(t, Ti - 0.05, 0.06) + 0.3 * sig(t, Ti + 0.25, 0.08)],
+    hip: [0.06, -0.06 + 0.12 * sig(t, 0.75, 0.1) + 0.3 * sig(t, Ti - 0.06, 0.1) + 0.3 * sig(t, Ti + 0.25, 0.08)],
     jump: 0.13 * bump(t, Ti + 0.05, 0.11),
-    footL: [0.0, 0.2], footR: [0.12, -0.24], footYawL: -40, footYawR: -90, plant: 'L',
+    // Pendant le vol, les pieds suivent le corps : réception sur le pied gauche dans le terrain, la jambe
+    // droite passe devant (sinon le bassin finit 45 cm devant l'appui, d'où des moments de genou irréalistes).
+    footL: [0.12, 0.2 + 0.42 * sig(t, Ti + 0.1, 0.04)], footR: [0.12 - 0.1 * sig(t, Ti + 0.2, 0.06), -0.24 + 0.9 * sig(t, Ti + 0.2, 0.06)],
+    footYawL: -40, footYawR: -90, plant: 'L',
     armR, armL,
-  }));
+  }), { post: { t0: 'peak', from: Ti - 0.12, to: Ti + 0.02 } });
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -200,7 +271,7 @@ export function makeDemoForehand(profile = {}) {
     jump: 0,
     footL: [0.28, 0.16], footR: [-0.33, -0.08], footYawL: -15, footYawR: -60, plant: 'L',
     armR, armL,
-  }), { seed: 11 });
+  }), { seed: 11, post: { t0: 'peak', from: Ti - 0.12, to: Ti + 0.02 } });
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -229,7 +300,7 @@ export function makeDemoBackhand(profile = {}) {
     jump: 0,
     footL: [0.15, -0.2], footR: [-0.08, 0.28], footYawL: 70, footYawR: 45, plant: 'R',
     armR, armL,
-  }), { seed: 13 });
+  }), { seed: 13, post: { t0: 'peak', from: Ti - 0.12, to: Ti + 0.02 } });
 }
 
 // ---------------------------------------------------------------------------------------------------------

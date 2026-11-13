@@ -176,3 +176,88 @@ targetGesture(optResult, res) → { label, params: { clé: { from, to, delta, un
   keyframes: [{ phase, targets }], speedScale, simulated: true }
 mapTime(timeMap, tRel) → tGhost   // rejouer le squelette du joueur avec t → mapTime(t) donne le « fantôme » recalé
 ```
+
+## Vague 2 — analyse
+
+Modules purs (sans DOM, sans dépendance), importables par node. Coordonnées image normalisées 0–1 (y vers le
+bas) sauf mention ; repère terrain de court.js : origine au centre du filet, X en travers (positif à droite vu
+depuis la ligne de fond proche de la caméra), Y le long du court (−11,885 = fond proche), Z vers le haut, mètres.
+
+### court.js — calibration du court (A04)
+
+```
+COURT_ITF, COURT_LINES                         // modèle ITF (m), segments [x1, y1, x2, y2]
+calibrateCourt(imageData, opts?) → cal | null   // automatique : masque de lignes blanches + Hough + hypothèses 2×2
+calibrateManual(points[4], { width, height, court?, pixels? }) → cal | null
+  // défaut : coins du simple, ordre fond proche gauche, fond proche droite, fond éloigné droite, fond éloigné gauche
+cal = { H (pixels → sol m), Hinv, width, height, camera: { f, R, t, center:[X,Y,Z], heightM }, conf, source: 'auto'|'manual', lines? }
+toGround(cal, {x, y}) → {x, y} m              // point AU SOL (pied, rebond)
+toImage(cal, {x, y}) → {x, y} normalisé
+feetOnGround(cal, frame) → {x, y} | null        // milieu des chevilles d'une image de pose
+inCourt(g, { doubles?, side?: 'near'|'far', margin? }) → bool
+homographyFromPoints(src, dst), applyHomography(H, p), cameraFromHomography(H, W, H), whiteLineMask, houghLines
+```
+
+### racket.js — raquette sans réseau de neurones (C01–C05)
+
+```
+createRacketTracker({ width, height, hand?, heightM? }) → { push(t, imageData, poseFrame), result() }
+result() → { frames: [{ t, found, source: 'image'|'model', px, py (centre du tamis, px), x, y (normalisés), a, b, angle,
+  along, across, scale, conf, vx, vy, speed (m/s dans le plan image), normal: {x, y, z} }], fps, detected, total }
+analyzeRacket(result, res?, { ballTrack?, tImpact? }) → { headSpeedKmh, faceAngleDeg (> 0 = ouverte), faceYawDeg,
+  pathAngleDeg (trajectoire sur 30 ms avant l'impact, > 0 = montante), normal, impactPoint: { alongCm, acrossCm,
+  offCenterCm } | null (si balle visible à l'impact), conf, source }
+fitEllipseRansac(pts, prior, opts), conicToEllipse(q), faceNormals(...)   // briques exposées pour les tests
+```
+Repli « avant-bras » (source 'model', conf ≤ 0,35) quand le cadre n'est pas trouvé (flou de bougé à l'impact).
+
+### footwork.js — jeu de jambes (B10 / B12)
+
+```
+analyzeFootwork(frames, { cal?, heightM?, aspect?, side?: 'near'|'far', cues?: [t], strokes?: [{t, type}], mirror? }) → {
+  planar (true sans calibration : latéral seulement), scale, series: { t, lat, fwd, speed, accel, airL, airR },
+  contacts: [{ foot: 'L'|'R', t0, t1, ms, ground: {x, y} }],
+  splitSteps: [{ t, tLand, airMs, heightM, stanceM, conf, firstStep: { t, foot, direction, delayMs, reactionMs, falseStep } | null }],
+  com: { distanceM, maxSpeed, meanSpeed, maxAccel }, perStroke: [{ t, type, side, amplitudeM, peakSpeed, support }],
+  asymmetry, conf }
+footworkAsymmetry(perStroke, contacts?) → { moves, supports, strokes, alerts: [{ key, text }] }   // indices en % (droite − gauche)
+```
+reactionMs = premier pas − frappe adverse (cues) ; lat > 0 = droite du joueur.
+
+### ballstats.js — effet et rebonds (E04 / E05), modèle physics.js en lecture seule
+
+```
+spinFromTrajectory(pts [{t, x, y}] ou points de ball.estimateBallFlight, { yIsHeight?, rho? })
+  → { spinRpm, speedKmh, launchDeg, h0, rms, sigmaRpm, conf, n, type: 'lift'|'slice'|'à plat' } | null
+spinFromBounce({ inSpeed, inAngleDeg, outSpeed+outAngleDeg | outVx+bounceHeight, surface? })
+  → { spinRpm | null, regime: 'roulement'|'glissement', maxRpm|minRpm (borne en glissement), ey, conf }
+bounceMap(bounces [{x, y}] ou [{img}] + cal, { cal?, side?: 'far', doubles? })
+  → { n, points (in, depthM), center, ellipse95: { cx, cy, a, b, angleDeg, areaM2 }, meanDepthM, sdDepthM, inPct, zones }
+ellipsePoint(ellipse, k∈[0,1)) → {x, y}
+```
+
+### match.js — match filmé derrière la ligne de fond (I01–I04)
+
+```
+bouncesFromTrack(ballTrack, { cal?, minKink? }) → [{ t, x, y, img, conf }]
+segmentPoints({ strokes, bounces, ballSeen }, { pauseS = 5, refaultS = 25 }) → points (avec fault1 si première balle faute)
+analyzeMatch({ strokes [{t, type, conf}], bounces?, ballSeen?, positions? [{t, x, y}], ballTrack?, cal?, serverX? }, { pauseS?, heatCell? }) → {
+  points: [{ t0, t1, server, firstServeFault, doubleFault, strokes, rally, outcome: 'gagné'|'perdu'|null, outcomeConf }],
+  summary: { points, strokes, byType, won, lost, unknown, servePoints, firstServePct, doubleFaults, meanRally, outcomeConf },
+  heatmap: { x0, y0, cell, cols, rows, share[], seconds, peak, behindBaselinePct },
+  sequences: [{ key, label, count, won, lost, successPct }],
+  opponent: { shots, direction: {gauche, centre, droite} %, depth %, favourite, serve: {large, corps, T} %, serves }, conf, notes }
+```
+
+### engine.js — hauteur de contact du service (compatible)
+
+`metrics.contactRatio` (service) est désormais rapporté au **sol** quand le saut est mesurable dans l'image
+(`res.imgRef` présent) : `contactRatio = contactRatioFeet + jumpHeight / height`. Nouveaux champs :
+`metrics.contactRatioFeet` (ancienne définition, poignet − chevilles) et `res.contactRef` ('ground' | 'feet' | null).
+
+### demo.js — accompagnement
+
+Après le pic de vitesse du poignet (= impact détecté), chaque paramètre du geste garde sa vitesse puis décélère
+(tronc et bassin τ = 0,2 s, bras en rotation τ = 0,1 s) et rejoint la pose prévue 0,5 s plus tard par un raccord C¹.
+Coup droit et revers : rien ne change avant l'impact. Service : quelques transitions (armé, poussée, inclinaisons du tronc) ont été
+élargies pour des accélérations réalistes.
