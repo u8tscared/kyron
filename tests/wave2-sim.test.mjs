@@ -2,7 +2,7 @@
 // Exécution : node tests/wave2-sim.test.mjs   (aucune dépendance)
 
 import * as P from '../app/core/physics.js';
-import { inverseDynamics, SEGMENTS, sgWeights } from '../app/core/dynamics.js';
+import { inverseDynamics, SEGMENTS, sgWeights, PLAUSIBLE } from '../app/core/dynamics.js';
 import { computeLoad, strokeLoad } from '../app/core/load.js';
 import { classifyStyle, dtw, referenceCurves, compareToReference, targetGesture, mapTime, ARCHETYPES } from '../app/core/style.js';
 
@@ -91,6 +91,62 @@ section('1. Dynamique inverse — validations analytiques');
   const y = tt.map((x) => 2 * x ** 3 - x + 1);
   const a = S[15].W[2].reduce((s2, wq, q) => s2 + wq * y[S[15].a + q], 0);
   ok(near(a, 12 * tt[15], 1e-6), 'Savitzky-Golay (pas irrégulier) exact sur un cubique', `ÿ = ${f(a, 4)}`);
+}
+
+section('1 bis. Dynamique inverse — robustesse aux données bruitées (bruit, sauts de pose, visibilité faible)');
+{
+  let sd = 987654321; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const gn = () => Math.sqrt(-2 * Math.log(rnd() + 1e-12)) * Math.cos(2 * Math.PI * rnd());
+  const base = standingPose(), M = 75, fps = 240, sh = base[12], alpha = 60;
+  const lens = { el: 0.30, wr: 0.57, tip: 0.65 };
+  const proj = (W) => W.map((p) => ({ x: 0.5 - p.x * 0.3, y: 0.5 - p.y * 0.3, v: 0.95 }));
+  // a) Bras en rotation analytique + bruit 3 mm + sauts de pose d'une ou deux images + un poignet « perdu »
+  const clean = [], noisy = [];
+  for (let k = 0; k < 120; k++) {
+    const t = k / fps, th = 0.5 * alpha * t * t;
+    const W = base.map((p) => ({ ...p }));
+    const at = (d) => ({ x: sh.x, y: sh.y + Math.sin(th) * d, z: sh.z + Math.cos(th) * d });
+    W[14] = at(lens.el); W[16] = at(lens.wr); W[18] = at(lens.tip); W[20] = at(lens.tip);
+    clean.push({ t, world: W, img: proj(W) });
+    const Wn = W.map((p) => ({ x: p.x + 0.003 * gn(), y: p.y + 0.003 * gn(), z: p.z + 0.003 * gn() }));
+    noisy.push({ t, world: Wn, img: proj(W) });
+  }
+  const jump = (i, js, dx, dz) => { for (const j of js) { noisy[i].world[j].x += dx; noisy[i].world[j].z += dz; } };
+  jump(40, [16, 18, 20], 0.4, -0.2); jump(41, [16, 18, 20], 0.4, -0.2); // main échangée deux images
+  jump(58, [14], -0.3, 0.25); jump(77, [11, 12, 0, 7, 8], 0.35, -0.3); // coude puis haut du corps
+  noisy[50].world[16] = { x: 1.2, y: -0.4, z: 0.9 }; noisy[50].img[16].v = 0.1; // poignet perdu (occlusion)
+  const dC = inverseDynamics(clean, null, { heightM: 1.8, massKg: M });
+  const dR = inverseDynamics(noisy, null, { heightM: 1.8, massKg: M });
+  const dRaw = inverseDynamics(noisy, null, { heightM: 1.8, massKg: M }, { clean: false });
+  const err = (d) => { const e = []; for (let k = 30; k <= 85; k++) e.push(Math.abs(d.series.shoulderTorque.total[k] - dC.series.shoulderTorque.total[k]) / dC.series.shoulderTorque.total[k]); e.sort((a, b) => a - b); return { med: e[e.length >> 1], max: e[e.length - 1] }; };
+  const eR = err(dR), eRaw = err(dRaw);
+  ok(eR.max < 0.15 && dR.doubtful.length === 0, 'bruit + sauts de pose : moment à l’épaule à < 15 % du calcul sur données propres (validé analytiquement), aucune valeur douteuse',
+    `écart max ${f(eR.max * 100, 1)} % (médian ${f(eR.med * 100, 1)} %), ${f(dR.model.cleanedFraction * 100, 2)} % de points remplacés`);
+  ok(eRaw.max > 3 * eR.max, 'sans nettoyage, les sauts de pose faussent le calcul', `écart max brut ${f(eRaw.max * 100, 0)} %`);
+  ok(dR.peaks.shoulderTotal && near(dR.peaks.shoulderTotal.value, dC.peaks.shoulderTotal.value, 0.1), 'pic robuste (percentile 90) ≈ pic sur données propres',
+    `${f(dR.peaks.shoulderTotal.value)} vs ${f(dC.peaks.shoulderTotal.value)} N·m (max brut ${f(dRaw.peaks.shoulderTotal?.rawMax ?? NaN)} sans nettoyage)`);
+  ok(dR.confidence < dC.confidence, 'les points remplacés font baisser la confiance', `${dC.confidence} → ${dR.confidence}`);
+  // b) Debout immobile filmé à 120 i/s, bruit 1,5 cm et « retournements » du tronc (cas réel : lombaires à 1 412 N·m)
+  const still = Array.from({ length: 150 }, (_, k) => ({ t: k / 120, world: base.map((p) => ({ x: p.x + 0.015 * gn(), y: p.y + 0.015 * gn(), z: p.z + 0.015 * gn() })), img: proj(base) }));
+  for (const i of [30, 31, 62, 90, 118]) for (const j of [0, 7, 8, 11, 12]) { still[i].world[j].x *= -1; still[i].world[j].z -= 0.35; }
+  const sR = inverseDynamics(still, null, { heightM: 1.8, massKg: M }), sRaw = inverseDynamics(still, null, { heightM: 1.8, massKg: M }, { clean: false });
+  const lum = (d) => (d.peaks.lumbar ? d.peaks.lumbar.perKg : Infinity);
+  ok(lum(sR) < 1.5 && d0Like(sR), 'immobile + bruit + retournements du tronc : lombaires et réaction du sol plausibles',
+    `L5/S1 ${f(lum(sR), 2)} N·m/kg, sol ${f(sR.peaks.grfVertical?.value, 2)} PC (sans nettoyage : L5/S1 ${f(lum(sRaw), 1)} N·m/kg, ${sRaw.doubtful.length} valeur(s) douteuse(s))`);
+  function d0Like(d) { return d.peaks.grfVertical && d.peaks.grfVertical.value < 1.5; }
+  // c) Vidéo inexploitable (bruit 8 cm, 15 % d'images corrompues) : aucun chiffre absurde affiché
+  const junk = Array.from({ length: 120 }, (_, k) => ({ t: k / 60, world: base.map((p) => ({ x: p.x + 0.08 * gn(), y: p.y + 0.08 * gn(), z: p.z + 0.08 * gn() })), img: proj(base).map((p) => ({ ...p, v: rnd() < 0.2 ? 0.2 : 0.9 })) }));
+  for (let k = 0; k < 18; k++) { const i = Math.floor(rnd() * 120); for (const p of junk[i].world) { p.x += gn() * 0.6; p.z += gn() * 0.6; } }
+  const dJ = inverseDynamics(junk, null, { heightM: 1.8, massKg: M });
+  const absurd = Object.entries(PLAUSIBLE).filter(([k, lim]) => dJ.peaks[k] && (dJ.peaks[k].perKg ?? dJ.peaks[k].value) > lim);
+  ok(absurd.length === 0 && dJ.confidence < 0.3 && (dJ.doubtful.length === 0 || dJ.alerts.some((a) => a.key === 'doubtful' && a.severity === 1)),
+    'vidéo inexploitable : aucune valeur hors plage affichée, confiance basse, valeurs douteuses signalées',
+    `confiance ${dJ.confidence}, douteuses : ${dJ.doubtful.map((d) => d.key).join(', ') || 'aucune'}, coupure bras/corps ${dJ.model.cutoffHz.arm}/${dJ.model.cutoffHz.body} Hz`);
+  // d) Garde-fou : une valeur invraisemblable est masquée (null), signalée et pénalise la confiance
+  const flip = clean.map((fr, k) => (k === 60 || k === 61 ? { ...fr, world: fr.world.map((p, j) => (j === 16 || j === 18 || j === 20 ? { x: p.x + 1.5, y: p.y, z: p.z } : p)) } : fr));
+  const dF = inverseDynamics(flip, null, { heightM: 1.8, massKg: M }, { clean: false });
+  ok(dF.doubtful.length > 0 && dF.doubtful.every((d) => dF.peaks[d.key] === null) && dF.confidence < dC.confidence && dF.alerts.some((a) => a.key === 'doubtful'),
+    'garde-fou de plausibilité : valeur absurde masquée et marquée « douteuse »', dF.doubtful.map((d) => `${d.key} ${f(d.perKg ?? d.value, 1)}`).join(', '));
 }
 
 section('2. Dynamique inverse — séquences de démonstration');

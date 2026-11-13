@@ -10,15 +10,21 @@
 //     img ≈ A·world ajustée par moindres carrés, puis déplacement des hanches dans l'image → déplacement monde
 //     (pseudo-inverse : la composante dans l'axe de la caméra est inobservable et mise à zéro). Sans image, repli
 //     sur un ancrage au pied le plus bas (vertical seulement) ;
-//  3. dérivées lissées par Savitzky-Golay (polynôme de degré 3 local, coupure effective ≈ 15 Hz) ;
-//  4. modèle à 14 segments de De Leva (1996) + raquette rigidement liée à la main ;
+//  3. nettoyage des points aberrants (visibilité faible, sauts de pose d'une image à l'autre, filtre de Hampel,
+//     longueurs d'os incohérentes) remplacés par interpolation, puis dérivées lissées par Savitzky-Golay
+//     (degré 5, coupure effective adaptée à la cadence : 15 Hz ≥ 100 i/s, 12 Hz ≥ 50 i/s, 8 Hz en dessous) ;
+//  4. modèle à 14 segments de De Leva (1996) + raquette rigidement liée au poignet (axe entre main et avant-bras) ;
 //  5. Newton-Euler sous forme « somme des segments distaux » : le moment net à une articulation est
 //     M = Σ_distaux [ (c_i − J) × m_i (a_i − g) + dH_i/dt ] (− le moment de la réaction du sol pour le genou),
 //     ce qui équivaut à la récursion périphérie → tronc sans propager les erreurs de signe ;
 //  6. réaction du sol totale F = Σ m_i (a_i − g), répartie entre les pieds au sol (règle du levier).
 //
-// INCERTITUDE (à afficher) : une seule caméra, pas de plateforme de force, des segments rigides, une raquette
-// alignée sur la main, des dérivées secondes de positions bruitées. Les pics sont des ESTIMATIONS d'ordre de
+//  7. pics robustes (percentile 90 autour du maximum d'une série débarrassée des pointes isolées) et garde-fou de
+//     plausibilité : une valeur hors de toute plage physiologique publiée est marquée « douteuse », masquée
+//     (pic = null) et fait baisser la confiance, au lieu d'afficher un chiffre absurde.
+//
+// INCERTITUDE (à afficher) : une seule caméra, pas de plateforme de force, des segments rigides, un axe de raquette
+// supposé, des dérivées secondes de positions bruitées. Les pics sont des ESTIMATIONS d'ordre de
 // grandeur (± 30 à 50 % typiquement) ; les tendances d'une séance à l'autre sont plus fiables que les valeurs absolues.
 
 import { customize, RACKETS } from './physics.js';
@@ -56,6 +62,16 @@ export const THRESHOLDS = {
   grfHorizontal: { warn: 1.2, high: 1.6, unit: 'PC' },
   lumbar: { warn: 2.5, high: 3.5, unit: 'N·m/kg' },
   knee: { warn: 2.5, high: 3.2, unit: 'N·m/kg' },
+};
+
+// Garde-fou de plausibilité : au-delà, la valeur est physiologiquement invraisemblable pour un joueur (≈ 2 fois les
+// plus hautes valeurs publiées, lancer de baseball compris : RI ≈ 1,1 N·m/kg, valgus ≈ 1,1 N·m/kg chez les
+// lanceurs professionnels, Fleisig et al. 1995) : c'est presque toujours un artefact de suivi.
+export const PLAUSIBLE = {
+  shoulderIR: 2.0, shoulderTotal: 4.5, elbowValgus: 2.0,
+  lumbar: 7, lumbarLateral: 6, lumbarExtension: 6,
+  kneeLeft: 6, kneeRight: 6, // N·m/kg (le pic « knee » = côté plausible le plus chargé)
+  grfVertical: 6, grfHorizontal: 3, // poids de corps
 };
 
 // ---------- petite algèbre 3D (tableaux [x,y,z]) ----------
@@ -123,6 +139,73 @@ function sgApply(S, series) {
   return { p, v, a };
 }
 
+// ---------- Nettoyage des points aberrants ----------
+const median = (a) => { const s = [...a].sort((x, y) => x - y), n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; };
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+// Interpolation linéaire des échantillons marqués (bad[i] = true) ; aux bords, le plus proche point valide.
+function fillBad(x, bad) {
+  const n = x.length, out = x.map((p) => [...p]);
+  let prev = -1;
+  for (let i = 0; i <= n; i++) {
+    if (i < n && bad[i]) continue;
+    if (i - prev > 1) { // trou ]prev, i[
+      for (let k = prev + 1; k < i; k++) {
+        if (prev < 0 && i >= n) break;
+        out[k] = prev < 0 ? [...x[i]] : i >= n ? [...x[prev]] : lerp(x[prev], x[i], (k - prev) / (i - prev));
+      }
+    }
+    prev = i;
+  }
+  return out;
+}
+// Points aberrants d'une série 3D :
+//  - pointe : grand déplacement à l'aller ET au retour, en sens opposés, au-delà d'une vitesse plafond ;
+//  - Hampel : écart à la médiane glissante (± ~25 ms) supérieur à max(3 cm + déplacement typique local par image,
+//    4 σ robustes de la série) — le terme « déplacement local » évite de rejeter un mouvement rapide mais régulier.
+function outliers(x, dt, vmax, bad) {
+  const n = x.length, k = Math.max(2, Math.round(0.025 / dt));
+  const step = []; for (let i = 1; i < n; i++) step.push(dist(x[i], x[i - 1]));
+  for (let i = 1; i < n - 1; i++) {
+    const a = sub(x[i], x[i - 1]), b = sub(x[i + 1], x[i]);
+    if (step[i - 1] > vmax * dt && step[i] > vmax * dt && dot(a, b) < 0) bad[i] = true;
+  }
+  const dev = [], med = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - k), b = Math.min(n - 1, i + k), m = [0, 1, 2].map((c) => median(x.slice(a, b + 1).map((p) => p[c])));
+    med.push(m); dev.push(dist(x[i], m));
+  }
+  const sig = 1.4826 * median(dev);
+  for (let i = 0; i < n; i++) {
+    const a = Math.max(0, i - k), b = Math.min(n - 2, i + k - 1);
+    const typ = median(step.slice(a, b + 1));
+    if (dev[i] > Math.max(0.03 + typ, 4 * sig)) bad[i] = true;
+  }
+  return bad;
+}
+// Os contrôlés (proximal, distal) : une longueur à plus de 30 % (+ 2 cm) de sa médiane marque le point distal.
+const BONES = [[11, 13], [13, 15], [12, 14], [14, 16], [15, 19], [15, 17], [16, 20], [16, 18], [23, 25], [25, 27], [24, 26], [26, 28], [27, 29], [27, 31], [28, 30], [28, 32], [11, 12], [23, 24]];
+function cleanJoints(raw, vis, dt) {
+  const n = raw[0]?.length || 0, joints = Object.keys(raw).map(Number), bad = {};
+  let nBad = 0, nTot = 0;
+  for (const j of joints) {
+    bad[j] = vis[j].map((v) => v < 0.3);
+    const vmax = [15, 16, 17, 18, 19, 20].includes(j) ? 45 : [13, 14].includes(j) ? 30 : 20; // m/s relatifs aux hanches
+    outliers(raw[j], dt, vmax, bad[j]);
+  }
+  for (const [a, b] of BONES) {
+    if (!raw[a] || !raw[b]) continue;
+    const len = raw[a].map((p, i) => dist(p, raw[b][i])), good = len.filter((_, i) => !bad[a][i] && !bad[b][i]);
+    const lm = median(good.length > n / 3 ? good : len);
+    for (let i = 0; i < n; i++) if (!bad[a][i] && Math.abs(len[i] - lm) > 0.3 * lm + 0.02) bad[b][i] = true;
+  }
+  const out = {};
+  for (const j of joints) {
+    const c = bad[j].filter(Boolean).length; nBad += c; nTot += n;
+    out[j] = c ? fillBad(raw[j], bad[j]) : raw[j];
+  }
+  return { J: out, fraction: nTot ? nBad / nTot : 0 };
+}
+
 // ---------- Translation du bassin ----------
 // Ajuste img − img_hanches ≈ A·world (2×3) sur tous les points visibles, puis inverse le déplacement des hanches.
 function rootFromImage(frames, scale) {
@@ -174,7 +257,8 @@ function rootFromFeet(frames, scale) {
 }
 
 // ---------- Dynamique inverse ----------
-export function inverseDynamics(frames, res = null, profile = {}) {
+// opts.clean = false désactive le nettoyage des points aberrants (comparaison, tests).
+export function inverseDynamics(frames, res = null, profile = {}, opts = {}) {
   const n = frames?.length || 0;
   if (n < 15) throw new Error('Séquence trop courte pour la dynamique inverse (≥ 15 images).');
   const t = frames.map((f) => f.t);
@@ -192,17 +276,43 @@ export function inverseDynamics(frames, res = null, profile = {}) {
   const est = frames.map((f) => f.world[0].y - Math.min(f.world[27].y, f.world[28].y) + 0.18).sort((a, b) => a - b)[Math.floor(n / 2)];
   const scale = clamp(heightM / (est || heightM), 0.75, 1.3);
   // 2. Translation du bassin
+  const doClean = opts.clean !== false;
   const rootInfo = rootFromImage(frames, scale) || rootFromFeet(frames, scale);
-  // 3. Positions globales lissées + dérivées
-  // Demi-fenêtre choisie pour une coupure effective ≈ 15 Hz (pratique courante en cinétique du service) :
+  const dt = 1 / fps;
+  let root = rootInfo.root;
+  if (doClean) root = fillBad(root, outliers(root, dt, 12, root.map(() => false)));
+  // 3. Nettoyage puis positions globales lissées + dérivées
+  const need = [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+  const raw = {}, visJ = {};
+  for (const j of need) {
+    raw[j] = frames.map((f) => mul(v3(f.world[j]), scale));
+    visJ[j] = frames.map((f) => f.img?.[j]?.v ?? f.world[j].visibility ?? f.world[j].v ?? 1);
+  }
+  const cleaned = doClean ? cleanJoints(raw, visJ, dt) : { J: raw, fraction: 0 };
+  // Lissage : coupure effective adaptée à la cadence ET au bruit mesuré, avec deux noyaux :
+  //  - bras (coudes, poignets, mains) : 15 Hz à ≥ 100 i/s (pratique courante en cinétique du service), 12 Hz à
+  //    ≥ 50 i/s, 8 Hz en dessous (un mouvement rapide n'y est de toute façon pas résolu) ;
+  //  - reste du corps (tronc, tête, jambes, bassin) : au plus 10 Hz, ses mouvements utiles étant plus lents.
+  // Le bruit de chaque groupe est estimé par la MAD des différences secondes (σ ≈ 1,4826·MAD/√6, dominée par le
+  // bruit pendant les phases lentes) ; au-delà de 4 mm, la coupure baisse en σ^−0,4 pour garder un bruit
+  // d'accélération à peu près constant (∝ σ·f_c^2,5). Contrepartie assumée : sur une vidéo très bruitée, les pics
+  // réels sont sous-estimés — la confiance le reflète.
   // f_c ≈ (deg+1)/(3,2·h − 4,6) · f_s/2 pour un Savitzky-Golay de degré deg (Schafer 2011)
   // Degré 5 : bande passante plus plate que le degré 3 à coupure égale (moins de biais sur les rotations rapides)
-  const deg = 5;
-  const h = clamp(Math.round(((deg + 1) * fps / 30 + 4.6) / 3.2), 3, 24);
-  const S = sgWeights(t, h, deg);
+  const deg = 5, fcMax = fps >= 100 ? 15 : fps >= 50 ? 12 : 8;
+  const ARM = new Set([13, 14, 15, 16, 17, 18, 19, 20]);
+  const noiseOf = (js) => median(js.flatMap((j) => [0, 1, 2].map((c) => {
+    const x = cleaned.J[j], d2 = []; for (let i = 1; i < n - 1; i++) d2.push(Math.abs(x[i + 1][c] - 2 * x[i][c] + x[i - 1][c]));
+    return 1.4826 * median(d2) / Math.sqrt(6);
+  })));
+  const noiseArm = noiseOf([...ARM]), noiseBody = noiseOf(need.filter((j) => !ARM.has(j)));
+  const adapt = (f0, sg) => clamp(f0 * Math.pow(0.004 / Math.max(0.004, sg), 0.4), 4, f0);
+  const fc = adapt(fcMax, noiseArm), fcBody = adapt(Math.min(10, fcMax), noiseBody);
+  const hOf = (f) => clamp(Math.round(((deg + 1) * fps / (2 * f) + 4.6) / 3.2), 3, 40);
+  const h = hOf(fc), hB = hOf(fcBody);
+  const S = sgWeights(t, h, deg), SB = hB === h ? S : sgWeights(t, hB, deg);
   const J = {};
-  const need = [0, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-  for (const j of need) J[j] = sgApply(S, frames.map((f, i) => add(mul(v3(f.world[j]), scale), rootInfo.root[i])));
+  for (const j of need) J[j] = sgApply(ARM.has(j) ? S : SB, cleaned.J[j].map((p, i) => add(p, root[i])));
   const P = (j, i) => J[j].p[i], A = (j, i) => J[j].a[i];
 
   // Segments « tige » : proximal p, distal d (fonctions des images) → CM, accélération du CM, axe unitaire et ü
@@ -215,7 +325,7 @@ export function inverseDynamics(frames, res = null, profile = {}) {
   // Dériver deux fois des positions cartésiennes d'un segment qui tourne vite biaise fortement les pics (le
   // polynôme local ne suit pas un arc de plus d'un radian) ; ω, lui, varie lentement. La rotation propre autour
   // de l'axe de la tige est inobservable et négligée (inertie axiale faible, sauf le tronc traité à part).
-  const rod = (key, prox, distP, mass, k, rg, cPos = null) => {
+  const rod = (key, prox, distP, mass, k, rg, cPos = null, S = SB) => {
     const c = [], ac = [], ad = [], u = [], len = [], H = [];
     for (let i = 0; i < n; i++) {
       const d = sub(distP[i], prox.p[i]); len.push(norm(d)); u.push(unit(d));
@@ -239,28 +349,34 @@ export function inverseDynamics(frames, res = null, profile = {}) {
   for (const r of [true, false]) {
     const s = side(r), tag = r ? 'R' : 'L';
     const handTip = midJ(s.ix, s.pk).p;
-    const ua = rod('upperArm' + tag, pt(s.sh), J[s.el].p, DL.upperArm[0] * massKg, DL.upperArm[1], DL.upperArm[2]);
-    const fa = rod('forearm' + tag, { p: J[s.el].p, a: ua.ad }, J[s.wr].p, DL.forearm[0] * massKg, DL.forearm[1], DL.forearm[2]);
-    const hd = rod('hand' + tag, { p: J[s.wr].p, a: fa.ad }, handTip, DL.hand[0] * massKg, DL.hand[1], DL.hand[2]);
+    const ua = rod('upperArm' + tag, pt(s.sh), J[s.el].p, DL.upperArm[0] * massKg, DL.upperArm[1], DL.upperArm[2], null, S);
+    const fa = rod('forearm' + tag, { p: J[s.el].p, a: ua.ad }, J[s.wr].p, DL.forearm[0] * massKg, DL.forearm[1], DL.forearm[2], null, S);
+    const hd = rod('hand' + tag, { p: J[s.wr].p, a: fa.ad }, handTip, DL.hand[0] * massKg, DL.hand[1], DL.hand[2], null, S);
     const th = rod('thigh' + tag, pt(s.hip), J[s.kn].p, DL.thigh[0] * massKg, DL.thigh[1], DL.thigh[2]);
     const sk = rod('shank' + tag, { p: J[s.kn].p, a: th.ad }, J[s.an].p, DL.shank[0] * massKg, DL.shank[1], DL.shank[2]);
     const footC = J[s.he].p.map((x, i) => lerp(x, J[s.ft].p[i], DL.foot[1]));
     const ft = rod('foot' + tag, { p: J[s.an].p, a: sk.ad }, J[s.ft].p, DL.foot[0] * massKg, 0, DL.foot[2], footC);
     Object.assign(segs, { ['upperArm' + tag]: ua, ['forearm' + tag]: fa, ['hand' + tag]: hd, ['thigh' + tag]: th, ['shank' + tag]: sk, ['foot' + tag]: ft });
   }
-  // Raquette : tige rigidement liée à la main, CM à (équilibre − 7 cm de prise + 8 cm poignet → prise) le long de
-  // l'axe de la main (approximation : la raquette prolonge la main ; en réalité elle forme un angle avec l'avant-bras)
+  // Raquette : tige rigide issue du poignet, CM à (équilibre − 7 cm de prise + 8 cm poignet → prise). Axe : 75 %
+  // avant-bras + 25 % main. Le segment main (poignet → articulations des doigts, ~8 cm) est très court : son
+  // orientation est bruitée, et le bras de levier de 0,33 m de la raquette amplifiait ce bruit (dérivée seconde de
+  // l'angle) jusque dans l'épaule et les lombaires. En réalité la raquette forme un angle avec l'avant-bras (déviation
+  // ulnaire, extension du poignet) qu'une seule caméra ne mesure pas : c'est une approximation assumée.
+  // Inertie : I_cm transversal (masse, équilibre, poids de swing) ; le moment polaire (~0,0015 kg·m²) est négligé.
   {
     const hs = segs[R ? 'handR' : 'handL'], s = side(R), fa = segs[R ? 'forearmR' : 'forearmL'];
     const mr = rk.mass / 1000, off = (rk.balance - 7) / 100 + 0.08;
+    const ur = fa.u.map((x, i) => unit(add(mul(x, 0.75), mul(hs.u[i], 0.25))));
+    const urv = sgApply(S, ur).v, wr = ur.map((x, i) => cross(x, urv[i])), wrd = sgApply(S, wr).v;
     const c = [], ac = [], H = [];
     for (let i = 0; i < n; i++) {
-      const r = mul(hs.u[i], off);
+      const r = mul(ur[i], off);
       c.push(add(P(s.wr, i), r));
-      ac.push(add(add(fa.ad[i], cross(hs.wd[i], r)), cross(hs.w[i], cross(hs.w[i], r))));
-      H.push(mul(sub(hs.wd[i], mul(hs.u[i], dot(hs.wd[i], hs.u[i]))), rk.Icm));
+      ac.push(add(add(fa.ad[i], cross(wrd[i], r)), cross(wr[i], cross(wr[i], r))));
+      H.push(mul(sub(wrd[i], mul(ur[i], dot(wrd[i], ur[i]))), rk.Icm));
     }
-    segs.racket = { key: 'racket', m: mr, c, ac, u: hs.u, Hv: H, I: rk.Icm, len: 0.686, lenCV: 0 };
+    segs.racket = { key: 'racket', m: mr, c, ac, u: ur, w: wr, wd: wrd, Hv: H, I: rk.Icm, len: 0.686, lenCV: 0 };
   }
   // Tête : masse ponctuelle au milieu des oreilles
   const headC = midJ(7, 8);
@@ -274,7 +390,7 @@ export function inverseDynamics(frames, res = null, profile = {}) {
     let l = sub(P(11, i), P(12, i)); l = unit(sub(l, mul(u, dot(l, u)))); // gauche, orthogonalisé
     frame.push([l, u, cross(l, u)]); // [médio-latéral, long, antéro-postérieur]
   }
-  const omega = trunkOmega(frame, t, S);
+  const omega = trunkOmega(frame, t, SB);
   const mT = DL.trunk[0] * massKg;
   const Itr = [mT * (0.33 * trunkLen) ** 2, mT * (0.19 * trunkLen) ** 2, mT * (0.3 * trunkLen) ** 2]; // ML, long, AP
   const Hdot = (i, Ifac) => { // dH/dt = I·ω̇ + ω × (I·ω), exprimé dans le repère monde via le repère du tronc
@@ -368,12 +484,20 @@ export function inverseDynamics(frames, res = null, profile = {}) {
   const imp = Number.isInteger(res?.impact) ? res.impact : null;
   const stroke = res?.stroke || 'serve';
   // (les h premières et dernières images sont exclues : fenêtres de lissage décentrées, dérivées peu fiables)
-  const e0 = Math.min(h, Math.floor(n / 4)), e1 = n - 1 - e0;
+  const e0 = Math.min(Math.max(h, hB), Math.floor(n / 4)), e1 = n - 1 - e0;
   const i0 = imp == null ? e0 : clamp(imp - Math.round(fps * 0.8), e0, e1);
   const i1 = imp == null ? e1 : clamp(imp + Math.round(fps * (stroke === 'serve' ? 0.6 : 0.3)), i0, e1);
+  // Pic robuste : la série est d'abord débarrassée des pointes d'une image (médiane sur 3), puis on prend le
+  // percentile 90 des valeurs à ± 25 ms (≥ ± 2 images) autour de son maximum. Le maximum brut reste dans rawMax.
+  const pw = Math.max(2, Math.round(0.025 * fps));
+  const pct = (a, q) => { const s2 = [...a].sort((x, y) => x - y), r = q * (s2.length - 1), lo = Math.floor(r); return s2[lo] + (s2[Math.min(s2.length - 1, lo + 1)] - s2[lo]) * (r - lo); };
   const peak = (arr, absV = false) => {
-    let bi = i0; for (let i = i0; i <= i1; i++) if ((absV ? Math.abs(arr[i]) : arr[i]) > (absV ? Math.abs(arr[bi]) : arr[bi])) bi = i;
-    return { value: absV ? Math.abs(arr[bi]) : arr[bi], idx: bi, t: t[bi], msFromImpact: imp == null ? null : Math.round((t[bi] - t[imp]) * 1000) };
+    const y = arr.map((v) => (absV ? Math.abs(v) : v));
+    const ym = y.map((v, i) => (i > 0 && i < n - 1 ? median([y[i - 1], v, y[i + 1]]) : v));
+    let bi = i0, raw = i0;
+    for (let i = i0; i <= i1; i++) { if (ym[i] > ym[bi]) bi = i; if (y[i] > y[raw]) raw = i; }
+    const value = pct(ym.slice(Math.max(i0, bi - pw), Math.min(i1, bi + pw) + 1), 0.9);
+    return { value, rawMax: y[raw], idx: bi, t: t[bi], msFromImpact: imp == null ? null : Math.round((t[bi] - t[imp]) * 1000) };
   };
   const perKg = (p) => ({ ...p, perKg: p.value / massKg });
   const kneeL = peak(ser.kneeTorque.left), kneeR = peak(ser.kneeTorque.right);
@@ -384,7 +508,19 @@ export function inverseDynamics(frames, res = null, profile = {}) {
     lumbar: perKg(peak(ser.lumbarTorque.total)), lumbarLateral: perKg(peak(ser.lumbarTorque.lateral, true)), lumbarExtension: perKg(peak(ser.lumbarTorque.extension, true)),
     kneeLeft: perKg(kneeL), kneeRight: perKg(kneeR),
   };
-  peaks.knee = peaks.kneeLeft.value >= peaks.kneeRight.value ? { ...peaks.kneeLeft, side: 'left' } : { ...peaks.kneeRight, side: 'right' };
+  // Garde-fou de plausibilité : valeur invraisemblable → marquée douteuse et masquée (null), confiance réduite
+  const doubtful = [];
+  for (const key of Object.keys(PLAUSIBLE)) {
+    const p = peaks[key]; if (!p) continue;
+    const v = p.perKg ?? p.value, unitK = p.perKg != null ? 'N·m/kg' : 'PC';
+    if (!(Number.isFinite(v) && v <= PLAUSIBLE[key])) {
+      doubtful.push({ key, value: p.value, perKg: p.perKg ?? null, limit: PLAUSIBLE[key], unit: unitK, reason: Number.isFinite(v) ? 'hors plage physiologique' : 'valeur non finie' });
+      peaks[key] = null;
+    }
+  }
+  // genou le plus chargé parmi les côtés jugés plausibles
+  const kL = peaks.kneeLeft, kR = peaks.kneeRight;
+  peaks.knee = kL && (!kR || kL.value >= kR.value) ? { ...kL, side: 'left' } : kR ? { ...kR, side: 'right' } : null;
 
   // Confiance : cadence, visibilité, stabilité des longueurs de segments, translation du bassin, plafond 1 caméra
   const fpsF = clamp((fps - 20) / 100, 0.25, 1);
@@ -392,17 +528,24 @@ export function inverseDynamics(frames, res = null, profile = {}) {
   const bones = clamp(1 - 4 * Math.max(segs['upperArm' + tag].lenCV, segs['forearm' + tag].lenCV, segs.shankL.lenCV, segs.shankR.lenCV), 0.2, 1);
   const rootF = rootInfo.method === 'image' ? clamp(1 - 2 * (rootInfo.fitErr ?? 0.2), 0.4, 1) : 0.5;
   const scaleF = Math.abs(scale - 1) < 0.15 ? 1 : 0.8;
-  let confidence = 0.85 * fpsF * clamp(vis, 0.2, 1) * bones * rootF * scaleF;
+  const cleanF = clamp(1 - 1.5 * cleaned.fraction, 0.3, 1); // part de points remplacés par interpolation
+  // bruit : une coupure abaissée sous-estime les pics réels
+  const noiseF = clamp(Math.sqrt((fc / fcMax) * (fcBody / Math.min(10, fcMax))), 0.4, 1);
+  let confidence = 0.85 * fpsF * clamp(vis, 0.2, 1) * bones * rootF * scaleF * cleanF * noiseF;
   if (Number.isFinite(res?.confidence)) confidence *= Math.sqrt(clamp(res.confidence, 0.1, 1));
+  // chaque valeur douteuse réduit la confiance
+  const nDoubt = doubtful.length;
+  confidence *= Math.pow(0.7, nDoubt);
   confidence = +clamp(confidence, 0, 1).toFixed(2);
 
-  const alerts = buildAlerts(peaks, confidence, stroke);
+  const alerts = buildAlerts(peaks, confidence, stroke, doubtful);
   return {
     series: ser, peaks,
     units: { grf: 'PC (poids de corps)', torque: 'N·m', perKg: 'N·m/kg', t: 's' },
     confidence,
     alerts,
-    model: { massKg, heightM, sex, scale, root: rootInfo.method, rootFitErr: rootInfo.fitErr, smoothingMs: Math.round(h / fps * 1000), fps, window: [i0, i1] },
+    doubtful,
+    model: { massKg, heightM, sex, scale, root: rootInfo.method, rootFitErr: rootInfo.fitErr, smoothingMs: Math.round(h / fps * 1000), cutoffHz: { arm: +fc.toFixed(1), body: +fcBody.toFixed(1) }, noiseMm: { arm: +(noiseArm * 1000).toFixed(1), body: +(noiseBody * 1000).toFixed(1) }, fps, window: [i0, i1], cleanedFraction: +cleaned.fraction.toFixed(4) },
   };
 }
 
@@ -427,28 +570,36 @@ function trunkOmega(frame, t, S) {
   return { w, wd };
 }
 
-function buildAlerts(pk, conf, stroke) {
+const DOUBT_LABEL = { shoulderIR: "rotation interne d'épaule", shoulderTotal: "moment total à l'épaule", elbowValgus: 'valgus du coude', lumbar: 'lombaires (L5/S1)', lumbarLateral: 'flexion latérale lombaire', lumbarExtension: 'extension lombaire', kneeLeft: 'genou gauche', kneeRight: 'genou droit', knee: 'genou', grfVertical: 'réaction verticale du sol', grfHorizontal: 'réaction horizontale du sol' };
+function buildAlerts(pk, conf, stroke, doubtful = []) {
   const out = [];
   const low = conf < 0.4;
+  const fmt = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d).replace('.', ',') : '—');
+  const dl = doubtful;
+  if (dl.length) {
+    out.push({ key: 'doubtful', label: 'Valeurs douteuses masquées', severity: 1, value: dl.length, unit: '',
+      detail: `${dl.map((d) => `${DOUBT_LABEL[d.key] || d.key} (${fmt(d.perKg ?? d.value, 1)} ${d.unit}, plafond plausible ${fmt(d.limit, 1)})`).join(' ; ')} : hors de toute plage physiologique publiée, probablement un artefact de suivi (saut de pose, occlusion, flou). Valeur non affichée ; refilmez de profil, mieux éclairé, à 120 i/s ou plus.` });
+  }
   const push = (key, label, value, th, detail) => {
+    if (!pk[key]) return;
     let sev = value >= th.high ? 3 : value >= th.warn ? 2 : 0;
     if (!sev) return;
     if (low) sev = 1;
     out.push({ key, label, severity: sev, value, unit: th.unit, detail: detail + (low ? ' Mesure peu fiable (confiance faible) : à confirmer avec une meilleure prise de vue.' : '') });
   };
-  const f = (v, d = 2) => v.toFixed(d).replace('.', ',');
-  push('shoulderIR', "Rotation interne d'épaule élevée", pk.shoulderIR.perKg, THRESHOLDS.shoulderIR,
-    `Pic estimé ${f(pk.shoulderIR.value, 0)} N·m (${f(pk.shoulderIR.perKg)} N·m/kg). Repère haut niveau ≈ 0,6–0,9 N·m/kg : au-delà, la coiffe des rotateurs encaisse beaucoup à chaque frappe.`);
-  push('elbowValgus', 'Contrainte en valgus du coude', pk.elbowValgus.perKg, THRESHOLDS.elbowValgus,
-    `Pic estimé ${f(pk.elbowValgus.value, 0)} N·m (${f(pk.elbowValgus.perKg)} N·m/kg). Le ligament collatéral ulnaire seul cède vers 32–35 N·m : ce sont les muscles de l'avant-bras qui le protègent.`);
-  push('grfVertical', 'Impact vertical au sol élevé', pk.grfVertical.value, THRESHOLDS.grfVertical,
-    `Réaction verticale estimée ${f(pk.grfVertical.value, 1)} fois le poids du corps${stroke === 'serve' ? ' (réception du service)' : ''}.`);
-  push('grfHorizontal', 'Freinage horizontal élevé', pk.grfHorizontal.value, THRESHOLDS.grfHorizontal,
-    `Réaction horizontale estimée ${f(pk.grfHorizontal.value, 1)} fois le poids du corps : appuis et chevilles très sollicités.`);
-  push('lumbar', 'Charge lombaire élevée', pk.lumbar.perKg, THRESHOLDS.lumbar,
-    `Moment estimé à L5/S1 ${f(pk.lumbar.value, 0)} N·m (${f(pk.lumbar.perKg)} N·m/kg), dont flexion latérale ${f(pk.lumbarLateral.value, 0)} N·m. L'hyperextension combinée à l'inclinaison est le mécanisme décrit chez les serveurs lombalgiques.`);
-  push('knee', 'Charge du genou élevée', pk.knee.perKg, THRESHOLDS.knee,
-    `Moment estimé au genou ${pk.knee.side === 'left' ? 'gauche' : 'droit'} ${f(pk.knee.value, 0)} N·m (${f(pk.knee.perKg)} N·m/kg) : tendon rotulien fortement sollicité.`);
+  const f = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d).replace('.', ',') : '—');
+  push('shoulderIR', "Rotation interne d'épaule élevée", pk.shoulderIR?.perKg, THRESHOLDS.shoulderIR,
+    `Pic estimé ${f(pk.shoulderIR?.value, 0)} N·m (${f(pk.shoulderIR?.perKg)} N·m/kg). Repère haut niveau ≈ 0,6–0,9 N·m/kg : au-delà, la coiffe des rotateurs encaisse beaucoup à chaque frappe.`);
+  push('elbowValgus', 'Contrainte en valgus du coude', pk.elbowValgus?.perKg, THRESHOLDS.elbowValgus,
+    `Pic estimé ${f(pk.elbowValgus?.value, 0)} N·m (${f(pk.elbowValgus?.perKg)} N·m/kg). Le ligament collatéral ulnaire seul cède vers 32–35 N·m : ce sont les muscles de l'avant-bras qui le protègent.`);
+  push('grfVertical', 'Impact vertical au sol élevé', pk.grfVertical?.value, THRESHOLDS.grfVertical,
+    `Réaction verticale estimée ${f(pk.grfVertical?.value, 1)} fois le poids du corps${stroke === 'serve' ? ' (réception du service)' : ''}.`);
+  push('grfHorizontal', 'Freinage horizontal élevé', pk.grfHorizontal?.value, THRESHOLDS.grfHorizontal,
+    `Réaction horizontale estimée ${f(pk.grfHorizontal?.value, 1)} fois le poids du corps : appuis et chevilles très sollicités.`);
+  push('lumbar', 'Charge lombaire élevée', pk.lumbar?.perKg, THRESHOLDS.lumbar,
+    `Moment estimé à L5/S1 ${f(pk.lumbar?.value, 0)} N·m (${f(pk.lumbar?.perKg)} N·m/kg), dont flexion latérale ${f(pk.lumbarLateral?.value, 0)} N·m. L'hyperextension combinée à l'inclinaison est le mécanisme décrit chez les serveurs lombalgiques.`);
+  push('knee', 'Charge du genou élevée', pk.knee?.perKg, THRESHOLDS.knee,
+    `Moment estimé au genou ${pk.knee?.side === 'left' ? 'gauche' : 'droit'} ${f(pk.knee?.value, 0)} N·m (${f(pk.knee?.perKg)} N·m/kg) : tendon rotulien fortement sollicité.`);
   out.sort((a, b) => b.severity - a.severity);
   return out;
 }
