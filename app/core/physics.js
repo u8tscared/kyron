@@ -70,16 +70,55 @@ export const STRINGS = {
   hybrid: { label: 'Hybride poly / boyau', k: 1.03, e: 0.004, snap: 1.1, mu: 0.44, comfort: 0.8, tauH: 14, keep: 0.86, wearPerH: 0.004 },
 };
 
-// Raideur du lit de cordage (N/m) — ordre de grandeur 25–40 kN/m pour un tamis de 98–100 po² (Brody, Cross).
-export function bedStiffness(rk, s, tensionKg, gauge = 1.25) {
-  const S = STRINGS[s];
-  const dens = rk.pattern === '18x20' ? 1.08 : 1;
-  return 30000 * (tensionKg / 24) * S.k * dens * (100 / rk.head) * (1 + (gauge - 1.25) * 0.6);
+// ---------- D06 · Hybrides ----------
+// Un cordage se décrit soit par une clé de STRINGS (format historique), soit par un hybride :
+//   { mains: { material, gauge, tension }, crosses: { material, gauge, tension } }   (material = clé de STRINGS)
+// Les montants (plus longs, plus nombreux au contact) pèsent un peu plus : 55 % / 45 %.
+// Frottement corde/corde μ_ss (ordres de grandeur, Cross 2010 « string movement and spin ») : un polyester lisse
+// glisse sur les travers puis revient (snapback) → plus d'effet ; un multifilament ou un boyau accroche.
+// Le snapback est modélisé par une loi linéaire en μ_ss, calée pour retrouver les valeurs « plein lit » de STRINGS.
+export const STRING_FRICTION = { poly: 0.12, copoly_soft: 0.14, multi: 0.3, gut: 0.21, hybrid: 0.165 };
+const W_MAIN = 0.55;
+export function isHybrid(s) { return !!(s && typeof s === 'object' && s.mains && s.crosses); }
+function matOf(x) { return STRINGS[x?.material] ? x.material : 'poly'; }
+// Propriétés effectives d'un cordage (clé ou hybride). Pour une clé, renvoie STRINGS[clé] tel quel.
+export function stringProps(s) {
+  if (!isHybrid(s)) return STRINGS[s] || STRINGS.poly;
+  const a = STRINGS[matOf(s.mains)], b = STRINGS[matOf(s.crosses)];
+  const mix = (k) => W_MAIN * a[k] + (1 - W_MAIN) * b[k];
+  const muSS = (STRING_FRICTION[matOf(s.mains)] + STRING_FRICTION[matOf(s.crosses)]) / 2;
+  // Travers plus détendus que les montants → les montants glissent plus facilement (+1 %/kg, borné à ±5 %)
+  const dT = (s.mains.tension ?? 0) - (s.crosses.tension ?? 0);
+  const snap = (1.14 - 0.889 * (muSS - 0.12)) * (1 + clamp(0.01 * dT, -0.05, 0.05));
+  return {
+    label: `${a.label} / ${b.label}`, k: mix('k'), e: mix('e'), snap, mu: (a.mu + b.mu) / 2, comfort: 0.6 * a.comfort + 0.4 * b.comfort,
+    tauH: mix('tauH'), keep: mix('keep'), wearPerH: mix('wearPerH'), muSS, hybrid: true,
+  };
+}
+export function stringLabel(s) { return stringProps(s).label; }
+// Tension et calibre effectifs : pour un hybride, moyenne pondérée montants / travers, sauf si une tension
+// scalaire explicite est fournie (par exemple la tension restante calculée par tensionAfter).
+function effTension(s, T) {
+  if (Number.isFinite(T)) return T;
+  return isHybrid(s) ? W_MAIN * (s.mains.tension ?? 23) + (1 - W_MAIN) * (s.crosses.tension ?? 23) : 23;
+}
+function effGauge(s, g) {
+  if (isHybrid(s)) return W_MAIN * (s.mains.gauge ?? 1.25) + (1 - W_MAIN) * (s.crosses.gauge ?? 1.25);
+  return Number.isFinite(g) ? g : 1.25;
 }
 
-// Tension restante (kg) après d jours depuis la pose et h heures de jeu
+// Raideur du lit de cordage (N/m) — ordre de grandeur 25–40 kN/m pour un tamis de 98–100 po² (Brody, Cross).
+export function bedStiffness(rk, s, tensionKg, gauge = 1.25) {
+  const S = stringProps(s);
+  const T = effTension(s, tensionKg), g = effGauge(s, gauge);
+  const dens = rk.pattern === '18x20' ? 1.08 : 1;
+  return 30000 * (T / 24) * S.k * dens * (100 / rk.head) * (1 + (g - 1.25) * 0.6);
+}
+
+// Tension restante (kg) après d jours depuis la pose et h heures de jeu (hybride : T0 facultatif)
 export function tensionAfter(s, T0, days, hours) {
-  const S = STRINGS[s];
+  const S = stringProps(s);
+  T0 = effTension(s, T0);
   const tInf = T0 * S.keep;
   const relax = tInf + (T0 - tInf) * Math.exp(-(days * 24) / (S.tauH * 3));
   return Math.max(T0 * 0.55, relax * (1 - S.wearPerH * hours));
@@ -89,7 +128,8 @@ export function tensionAfter(s, T0, days, hours) {
 // Partie indépendante de la cinématique (calculée une fois par configuration matérielle) : masse effective,
 // COR de référence balle/cordage, raideurs, facteurs d'effet. Séparée pour que l'optimiseur l'appelle une seule fois.
 export function impactSetup({ rk, string, tension, gauge = 1.25, impactCm = 54, offCenter = 0 }) {
-  const S = STRINGS[string];
+  const S = stringProps(string);
+  tension = effTension(string, tension); gauge = effGauge(string, gauge);
   let Me = effectiveMass(rk, impactCm);
   // Impact décentré latéralement : la raquette tourne aussi autour de son axe longitudinal (twistweight).
   if (offCenter) { const tw = rk.tw / 1e4, d = offCenter / 100; Me = 1 / (1 / Me + (d * d) / tw); }
@@ -261,7 +301,7 @@ export function flight({ v, launch, spinRpm, h0, x0 = 0, rho = 1.2, wind = 0, su
         const dvRoll = vSurf * (BALL.I / (1 + BALL.I));
         const dv = Math.sign(vSurf) * Math.min(Math.abs(dvRoll), dvMax);
         vx -= dv; w += dv / (BALL.I * r); vy = vyOut; y = r + 1e-4;
-        after = { vx, vy, peak: (vy * vy) / (2 * G) + r, angle: Math.atan2(vy, vx) / DEG, kmh: Math.hypot(vx, vy) * 3.6, spinRpm: w * 60 / (2 * Math.PI) };
+        after = { vx, vy, peak: (vy * vy) / (2 * G) + r, angle: Math.atan2(vy, vx) / DEG, kmh: Math.hypot(vx, vy) * 3.6, spinRpm: w * 60 / (2 * Math.PI), slip: Math.abs(dvRoll) > dvMax };
       } else break;
     }
     if (x > COURT.base + 8) break;
@@ -393,6 +433,100 @@ export function windowLookup(T, v, spin, h, out) {
   return out;
 }
 
+// ---------- E07 · Rebond et kick par surface ----------
+// Indice de vitesse de court de l'ITF (Court Pace Rating) : CPR = 100·(1 − μ) + 150·(0,81 − e_y).
+export function courtPace(surface) {
+  const S = SURFACES[surface] || SURFACES.hard;
+  return 100 * (1 - S.mu) + 150 * (0.81 - S.ey);
+}
+// Profil de rebond d'une frappe : arrivée (vitesse, angle), sortie (vitesse, angle, effet), glissement ou roulement,
+// hauteur maximale après rebond, et hauteur de la balle quand elle passe la ligne de fond adverse (≈ là où le
+// relanceur frappe, réglable par receiverX). Modèle de rebond : restitution verticale e_y + frottement de Coulomb
+// jusqu'au roulement (Cross 2005) ; pas de déformation du court ni de dépendance de e_y à la vitesse.
+export function bounceProfile(v, launch, spinRpm, surface = 'hard', { h0 = 1, x0 = -1, rho = 1.2, wind = 0, receiverX = COURT.base } = {}) {
+  const tr = flight({ v, launch, spinRpm, h0, x0, rho, wind, surface, dt: 0.001, maxT: 4, keepPts: true });
+  if (!tr.bounce) return null;
+  const b = tr.bounce, a = tr.after;
+  let heightAtReceiver = null;
+  const P = tr.pts;
+  for (let i = 1; i < P.length; i++) {
+    if (P[i - 1][0] > b.x && P[i - 1][0] < receiverX && P[i][0] >= receiverX) {
+      const k = (receiverX - P[i - 1][0]) / (P[i][0] - P[i - 1][0]);
+      heightAtReceiver = P[i - 1][1] + k * (P[i][1] - P[i - 1][1]);
+      break;
+    }
+  }
+  const inAngle = Math.atan2(-b.vy, b.vx) / DEG;
+  return {
+    bounceX: b.x, netY: tr.netY, flightTime: b.t,
+    in: { kmh: b.speed, angleDeg: inAngle, spinRpm: null },
+    out: { kmh: a.kmh, angleDeg: a.angle, spinRpm: a.spinRpm, vx: a.vx, vy: a.vy },
+    slide: a.slip,                       // true : la balle glisse pendant tout le contact (pas de roulement)
+    peakH: a.peak,                       // hauteur max. du centre après rebond (m)
+    heightAtReceiver,                    // m, null si la balle retombe avant receiverX
+    kick: a.angle - inAngle,             // ° : rebond plus raide (+) ou plus rasant (−) que l'arrivée
+    speedKeptPct: (a.kmh / b.speed) * 100,
+    courtPace: courtPace(surface),
+  };
+}
+
+// ---------- C09 · Vibrations et confort du bras ----------
+// Raquette = poutre libre-libre uniforme (longueur L, masse m, rigidité EI). Premier mode de flexion :
+// f₁ = (β₁L)² / (2π L²) · √(EI / μ), β₁L = 4,730, μ = m/L. Nœuds à 0,224 L et 0,776 L du bout du manche
+// (≈ 15 et 53 cm pour 68,6 cm : le second tombe au centre du tamis — « sweet spot » vibratoire).
+// EI est déduit du RA (indice de rigidité Babolat) par une loi de puissance calée pour qu'une raquette de RA 64
+// et 315 g vibre à ≈ 145 Hz (raquettes modernes : ~120–180 Hz libres, Cross & Lindsey 2005).
+// Limites : poutre uniforme (une vraie raquette est plus rigide au cœur), main = appui ignoré pour la fréquence
+// (tenue en main, la fréquence baisse de 10–20 % et l'amortissement augmente fortement), un seul mode.
+const BETA1 = 4.730041, SIG1 = 0.982502;
+function modeShape(xi) { // normalisé à ±1 aux extrémités
+  const b = BETA1 * xi;
+  return (Math.cosh(b) + Math.cos(b) - SIG1 * (Math.sinh(b) + Math.sin(b))) / 2;
+}
+const GRIP_CM = 7; // centre de la prise (cm depuis le bout du manche)
+function beamOf(rk) {
+  const L = (rk.length || 68.6) / 100, m = rk.mass / 1000;
+  const EI = 168.7 * Math.pow(rk.ra / 64, 2.5);
+  const f = (BETA1 * BETA1) / (2 * Math.PI * L * L) * Math.sqrt(EI / (m / L));
+  return { L, m, EI, f };
+}
+let _vibRef = null;
+// Réponse brute (sans indice de confort) — utilisée aussi pour la référence de normalisation
+function vibRaw(rk, impactCm, offCenter, J, tc) {
+  const { L, m, f } = beamOf(rk);
+  const phiI = modeShape(clamp(impactCm / 100 / L, 0, 1)), phiH = modeShape(GRIP_CM / 100 / L);
+  // Réponse modale à une impulsion : amplitude au manche A = J·φ(impact)·φ(main) / (M_modale·ω), M_modale = m/4
+  const ampM = Math.abs(J * phiI * phiH / ((m / 4) * 2 * Math.PI * f));
+  // Choc rigide transmis à la main (pivot au manche) : impulsion P = J·(1 − x/q), nulle au centre de percussion
+  const Ip = rk.Icm + m * ((rk.balance - GRIP_CM) / 100) ** 2;
+  const q = Ip / (m * (rk.balance - GRIP_CM) / 100);
+  const Pimp = J * (1 - ((impactCm - GRIP_CM) / 100) / q);
+  // Décentrage latéral : couple de torsion J·d autour de l'axe du manche, repris par la prise (pic demi-sinus)
+  return { f, L, ampM, q, armShockN: Math.abs(Pimp) * Math.PI / (2 * tc), twistNm: J * Math.abs(offCenter) / 100 / tc * Math.PI / 2 };
+}
+export function vibration(rk, impactCm = 54, offCenter = 0, impactRes = null) {
+  // Impulsion de la balle (N·s) : celle de l'impact fourni, sinon un échange de fond de court typique (~2,6 N·s)
+  const J = impactRes && Number.isFinite(impactRes.peakForce) && Number.isFinite(impactRes.tContact)
+    ? impactRes.peakForce * 2 * impactRes.tContact / Math.PI : 2.6;
+  const tc = impactRes?.tContact ?? 0.0042;
+  const r = vibRaw(rk, impactCm, offCenter, J, tc);
+  // Référence : raquette « Contrôle 98 » frappée en haut du tamis (63 cm), même impulsion → amplitudeRel = 1
+  if (!_vibRef) _vibRef = customize(RACKETS[0], {});
+  const ref = vibRaw(_vibRef, 63, 0, J, tc);
+  const amplitudeRel = r.ampM / ref.ampM;
+  // Indice de confort 0–100 (choix de modélisation, pas une mesure clinique) : vibration au manche, choc rigide,
+  // torsion, et confort propre du cordage (impactRes.comfort) s'il est fourni.
+  const disc = 0.55 * amplitudeRel + 0.35 * r.armShockN / ref.armShockN + 0.1 * r.twistNm / 40;
+  const strComfort = impactRes?.comfort ?? 0.75;
+  const comfortIndex = clamp(100 * (1 - 0.45 * disc) * (0.75 + 0.25 * strComfort), 0, 100);
+  const { f, L, ampM, q, armShockN, twistNm } = r;
+  return {
+    // amplitudeMm : raquette LIBRE, sans amortissement de la main → borne haute, à lire en relatif
+    freqHz: f, nodesCm: [0.2242 * L * 100, 0.7758 * L * 100], amplitudeMm: ampM * 1000, amplitudeRel,
+    armShockN, twistNm, copCm: GRIP_CM + q * 100, impulseNs: J, comfortIndex,
+  };
+}
+
 // Est-ce que la frappe est bonne ? target : 'service' ou 'base'
 export function isIn(res, target) {
   if (res.netY === null || res.netY < COURT.netH + BALL.r) return { ok: false, why: 'filet' };
@@ -435,20 +569,32 @@ export function bestAngle(nom, target, disp, N = 600) {
 }
 
 // ---------- Recommandation cordage ----------
-export function recommendStrings(base, goal) {
+// opts.hybrids = true : ajoute des hybrides courants (montants / travers de matériaux différents, travers 1 kg
+// plus bas). Dans ce cas l'entrée « string » peut être un objet hybride ; « label » est toujours fourni.
+export function recommendStrings(base, goal, opts = {}) {
   const out = [];
-  for (const s of Object.keys(STRINGS)) for (const gauge of [1.2, 1.25, 1.3]) for (let T = 18; T <= 28; T += 1) {
+  const cands = [];
+  for (const s of Object.keys(STRINGS)) for (const gauge of [1.2, 1.25, 1.3]) for (let T = 18; T <= 28; T += 1) cands.push({ string: s, gauge, tension: T });
+  if (opts.hybrids) {
+    const mats = ['poly', 'copoly_soft', 'multi', 'gut'];
+    for (const m of mats) for (const c of mats) if (m !== c) for (let T = 19; T <= 27; T += 1) {
+      const hy = { mains: { material: m, gauge: 1.25, tension: T }, crosses: { material: c, gauge: 1.25, tension: T - 1 } };
+      cands.push({ string: hy, gauge: effGauge(hy), tension: effTension(hy) });
+    }
+  }
+  for (const { string: s, gauge, tension: T } of cands) {
     const im = impact({ ...base, string: s, tension: T, gauge });
-    const control = clamp(0.45 + (T - 18) * 0.035 + (STRINGS[s].k - 1) * 0.5 + (gauge - 1.25) * 0.8, 0, 1);
+    const S = stringProps(s);
+    const control = clamp(0.45 + (T - 18) * 0.035 + (S.k - 1) * 0.5 + (gauge - 1.25) * 0.8, 0, 1);
     const sc = goal === 'speed' ? im.speed * 3.6 + control * 6 + im.comfort * 6
       : goal === 'spin' ? im.spinRpm / 20 + control * 12 + im.comfort * 6
       : goal === 'control' ? control * 60 + im.spinRpm / 200 + im.comfort * 8
       : im.comfort * 60 + im.speed * 3.6 / 10 + control * 6;
     const arm = Math.max(0, T - 25) ** 2 * 2 + Math.max(0, 20 - T) ** 2 * 1.5; // charge bras / perte de contrôle aux extrêmes
-    out.push({ string: s, gauge, tension: T, score: sc - arm, speed: im.speed * 3.6, spin: im.spinRpm, control, comfort: im.comfort, tContact: im.tContact });
+    out.push({ string: s, label: S.label, gauge, tension: T, score: sc - arm, speed: im.speed * 3.6, spin: im.spinRpm, control, comfort: im.comfort, tContact: im.tContact });
   }
   out.sort((a, b) => b.score - a.score);
   const seen = new Set(), top = [];
-  for (const o of out) { if (seen.has(o.string)) continue; seen.add(o.string); top.push(o); if (top.length === 3) break; }
+  for (const o of out) { const key = o.label; if (seen.has(key)) continue; seen.add(key); top.push(o); if (top.length === 3) break; }
   return top;
 }

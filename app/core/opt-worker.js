@@ -16,7 +16,7 @@
 
 import {
   RACKETS, STRINGS, COURT, customize, impactSetup, impactSolveInto, tensionAfter, airDensity,
-  swingSpeedFactor, buildWindowTable, windowLookup, flightFast,
+  swingSpeedFactor, buildWindowTable, windowLookup, flightFast, isHybrid, stringLabel,
 } from './physics.js';
 
 // ---------------------------------------------------------------------------------------------
@@ -182,8 +182,8 @@ export function buildProblem(cfg) {
   // Matériel actuel (cordage usé selon jours / heures)
   const E = cfg.equipment || {};
   const eqCfg = {
-    racket: racketSpec(E.spec && E.spec.mass ? E.spec : E.racket), leads: E.leads || {}, string: STRINGS[E.string] ? E.string : 'poly',
-    tension: num(E.tension, 23), gauge: num(E.gauge, 1.25), days: num(E.days, 0), hours: num(E.hours, 0),
+    racket: racketSpec(E.spec && E.spec.mass ? E.spec : E.racket), leads: E.leads || {}, string: isHybrid(E.string) || STRINGS[E.string] ? E.string : 'poly',
+    tension: isHybrid(E.string) ? num(E.tension, NaN) : num(E.tension, 23), gauge: num(E.gauge, 1.25), days: num(E.days, 0), hours: num(E.hours, 0),
   };
   const rk0 = customize(eqCfg.racket, eqCfg.leads);
   const Pb = {
@@ -714,7 +714,7 @@ export function finalize(Pb, { elites, equipBest, nValidate = 10, mcN = 3000, se
     equipment = {
       best: combo
         ? { racket: combo.racket.id, racketName: combo.racket.name, leads: combo.leads, string: combo.string, stringName: STRINGS[combo.string].label, tension: combo.tension, gauge: combo.gauge, ballKmh: bestEq.ballKmh, spinRpm: bestEq.spinRpm, successRate: bestEq.successRate, comfort: bestEq.comfort }
-        : { racket: E.racket.id ?? null, racketName: E.racket.name, leads: E.leads, string: E.string, stringName: STRINGS[E.string].label, tension: E.tension, gauge: E.gauge, ballKmh: bestEq.ballKmh, spinRpm: bestEq.spinRpm, successRate: bestEq.successRate, comfort: bestEq.comfort },
+        : { racket: E.racket.id ?? null, racketName: E.racket.name, leads: E.leads, string: E.string, stringName: stringLabel(E.string), tension: E.tension, gauge: E.gauge, ballKmh: bestEq.ballKmh, spinRpm: bestEq.spinRpm, successRate: bestEq.successRate, comfort: bestEq.comfort },
       current: { ballKmh: curEq.ballKmh, spinRpm: curEq.spinRpm, successRate: PcurEq, tensionNow: Pb.T0now, comfort: curEq.comfort },
       gainPct: isCurrent ? 0 : gainPct(Pb, bestEq, refEq),
       isCurrent,
