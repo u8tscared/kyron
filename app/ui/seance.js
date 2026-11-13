@@ -107,16 +107,37 @@ async function getLandmarker() {
   const fileset = await vision.FilesetResolver.forVisionTasks(base);
   const modelAssetPath = new URL('../models/pose_model.wasm', import.meta.url).href;
   const mk = (delegate) => vision.PoseLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath, delegate }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-  try { landmarker = await mk('GPU'); } catch (e) { landmarker = await mk('CPU'); }
+  // Sur certains iPhone, le GPU ne répond jamais (ni succès ni erreur) : délai de 12 s puis repli sur le processeur.
+  const withTimeout = (pr, ms) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error('délai GPU')), ms))]);
+  try { landmarker = await withTimeout(mk('GPU'), 12000); } catch (e) { console.warn('[kyron] GPU indisponible, repli CPU', e); status('Chargement du modèle de vision (mode processeur)…', 0.03); landmarker = await mk('CPU'); }
   return landmarker;
 }
 
 let tsCounter = 0;
 function loadMeta(v, file) {
   return new Promise((res, rej) => {
-    v.onloadedmetadata = () => res();
-    v.onerror = () => rej(new Error('format vidéo non lu par ce navigateur. Essaie un .mp4 ou .mov (H.264).'));
+    let done = false;
+    const ok = () => { if (done) return; done = true; clearTimeout(to); res(); };
+    // On attend une image décodée (loadeddata), pas seulement les métadonnées : sinon Safari iOS peut ne jamais répondre au premier déplacement.
+    v.onloadeddata = ok;
+    v.onloadedmetadata = () => { if (v.readyState >= 2) ok(); };
+    v.onerror = () => { if (done) return; done = true; clearTimeout(to); rej(new Error('format vidéo non lu par ce navigateur. Essaie un .mp4 ou .mov (H.264).')); };
+    const to = setTimeout(() => { if (v.readyState >= 1) ok(); else { done = true; rej(new Error("la vidéo ne se charge pas dans ce navigateur. Essaie de l'exporter en .mp4 (H.264) ou avec Safari / Chrome à jour.")); } }, 15000);
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
     v.src = URL.createObjectURL(file);
+    try { v.load(); } catch (e) { /* rien */ }
+  });
+}
+// Déplacement à l'instant t avec délai de garde : Safari ne déclenche pas toujours « seeked »
+// (même instant qu'avant, vidéo hors écran…). Au-delà de 2,5 s on continue quand même.
+function seekTo(v, t) {
+  return new Promise((res) => {
+    let done = false;
+    const fin = () => { if (done) return; done = true; clearTimeout(to); v.removeEventListener('seeked', fin); res(); };
+    const to = setTimeout(fin, 2500);
+    v.addEventListener('seeked', fin);
+    if (Math.abs(v.currentTime - t) < 1e-4) { fin(); return; }
+    v.currentTime = t;
   });
 }
 
@@ -143,9 +164,10 @@ async function extract(v, label, p0, p1, signal) {
   }
   let court = null;
   const t0 = performance.now();
+  let lastUi = 0;
   for (let t = 0; t < dur; t += step) {
     if (signal.aborted) throw Object.assign(new Error('annulé'), { name: 'AbortError' });
-    await new Promise((res) => { v.onseeked = res; v.currentTime = t; });
+    await seekTo(v, t);
     const out = lm.detectForVideo(v, ++tsCounter * 1000 / rate);
     if (out.landmarks?.length && out.worldLandmarks?.length) {
       frames.push({ t, img: out.landmarks[0].map((q) => ({ x: q.x, y: q.y, v: q.visibility ?? 1 })), world: out.worldLandmarks[0].map((q) => ({ x: q.x, y: -q.y, z: -q.z })) });
@@ -158,7 +180,9 @@ async function extract(v, label, p0, p1, signal) {
       // Calibration automatique du court sur la première image exploitable
       if (id && court === null && has('court', 'calibrateCourt')) { try { court = M.court.calibrateCourt(id) || false; if (court && !(court.conf > 0.25)) court = false; } catch (e) { court = false; } }
     }
-    if (frames.length % 4 === 0) {
+    // Mise à jour de l'écran toutes les ~250 ms, qu'un joueur soit trouvé ou non (avant : bloqué si aucune pose)
+    if (performance.now() - lastUi > 250 || t + step >= dur) {
+      lastUi = performance.now();
       const el = (performance.now() - t0) / 1000, pr = t / dur, eta = pr > 0.03 ? el / pr - el : null;
       status(`${label} · analyse image par image ${f(t, 1)} / ${f(dur, 1)} s · ${frames.length} poses${tracker ? ' · balle suivie' : ''}${eta != null ? ` · reste ≈ ${f(eta, 0)} s` : ''}`, p0 + (p1 - p0) * pr);
       emit('analysis', { stage: 'pose', p: p0 + (p1 - p0) * pr, t, dur, poses: frames.length, eta, ball: !!tracker, racket: !!rkt, frame: frames[frames.length - 1] || null, label });
