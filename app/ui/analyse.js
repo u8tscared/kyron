@@ -185,10 +185,25 @@ async function saveSession(sess, seance) {
     ballKmh: Math.round(best.ball?.speedKmh ?? best.res.metrics.ballSpeedKmh), measuredBall: !!best.ball?.speedKmh,
     byType: entry.byType, multi: !!sess.multi, fatigue: entry.fatigue,
   };
+  // Vidéo trop lourde pour le stockage en ligne (50 Mo sur l'offre gratuite) : on la compresse d'abord, en arrière-plan.
+  let video = sess.files?.[0] || null;
+  if (video && account.backend !== 'local') {
+    const { prepareVideo, COMPRESS } = await import('./compress.js');
+    if (video.size > COMPRESS.threshold) {
+      let lastC = -1;
+      toast('Compression de la vidéo…');
+      const r = await prepareVideo(video, { onProgress: (p, pass = 1) => {
+        const q = Math.round((p || 0) * 100), k = pass * 1000 + q;
+        if (k >= lastC + 10 && q < 100) { lastC = k - (k % 10); toast(`Compression de la vidéo${pass > 1 ? ` (essai ${pass})` : ''}… ${q} %`); }
+      } });
+      video = r.video;
+      if (r.info) summary.video = r.info;   // cadence d'origine / de sortie, définition, poids : utile au replay
+    }
+  }
   let lastP = -1;
   const id = await account.saveSession({
     stroke: stroke || best.type, source: sess.multi ? '2cam' : 'video', createdAt: sess.date, summary, result: seance.packSession(sess),
-    video: sess.files?.[0] || null, thumb,
+    video, thumb,
   }, { onProgress: (p) => { const q = Math.round((p || 0) * 100); if (q >= lastP + 20 && q < 100) { lastP = q; toast(`Enregistrement de ta séance… ${q} %`); } } });
   sess.savedId = id;
   try { sessionStorage.setItem('kyron-open', id); } catch (e) { /* rien */ }
