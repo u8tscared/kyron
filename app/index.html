@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KYRON Lab</title>
+<meta name="description" content="Analyse du geste de tennis par caméra, sans capteur.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="./ui/kyron.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="m1" viewBox="0 0 100 100">
+  <g stroke-linecap="round" fill="none">
+    <g stroke-width="16" style="stroke:currentColor"><line x1="26" y1="14" x2="26" y2="86"/><line x1="26" y1="56" x2="74" y2="16"/><line x1="46" y1="40" x2="76" y2="86"/></g>
+    <g stroke-width="6" style="stroke:var(--bgk)"><line x1="26" y1="14" x2="26" y2="86"/><line x1="26" y1="56" x2="74" y2="16"/><line x1="46" y1="40" x2="76" y2="86"/></g>
+  </g>
+  <g stroke-width="3.5" style="fill:var(--bgk);stroke:currentColor"><circle cx="26" cy="14" r="10"/><circle cx="26" cy="86" r="10"/><circle cx="74" cy="16" r="10"/><circle cx="76" cy="86" r="10"/><circle cx="46" cy="40" r="10"/></g>
+  <g style="fill:var(--acc)"><circle cx="26" cy="14" r="4"/><circle cx="26" cy="86" r="4"/><circle cx="74" cy="16" r="4"/><circle cx="76" cy="86" r="4"/><circle cx="46" cy="40" r="4"/></g>
+</symbol></defs></svg>
+
+<div id="boot" aria-hidden="true">
+  <div class="in">
+    <div class="id"><svg style="color:#fff"><use href="#m1"/></svg><b>KYRON</b></div>
+    <div class="log" id="bootLog"></div>
+  </div>
+</div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#seance" aria-label="KYRON, accueil"><svg aria-hidden="true" style="color:#fff"><use href="#m1"/></svg><b>KYRON</b><span>Lab · v1</span></a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#seance" data-r="seance"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="4.5" width="15" height="11"/><circle cx="10" cy="10" r="2.6"/></svg>Séance</a>
+      <a href="#optimiseur" data-r="optimiseur"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5" cy="14" r="1.2"/><circle cx="9" cy="9" r="1.2"/><circle cx="14" cy="11" r="1.2"/><circle cx="15" cy="5" r="1.2"/><path d="M3 17h14M3 3v14"/></svg>Optimiseur<i class="dot"></i></a>
+      <a href="#materiel" data-r="materiel"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><ellipse cx="11.5" cy="7" rx="4.5" ry="5"/><path d="M8.6 10.8 3.5 17"/></svg>Matériel</a>
+      <a href="#balle" data-r="balle"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 15c4-11 9-11 16 0" stroke-dasharray="2 2"/><circle cx="16" cy="14" r="1.8"/><path d="M2 17h16"/></svg>Balle</a>
+      <a href="#progression" data-r="progression"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 15l4-4 3 3 6-7"/><path d="M3 17h14"/></svg>Progrès</a>
+      <a href="#coach" data-r="coach"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 4h14v9H9l-4 3v-3H3z"/></svg>Coach</a>
+    </nav>
+    <div class="right">
+      <div class="seg" role="group" aria-label="Niveau de détail" id="modeSeg"><button data-m="simple" aria-pressed="true">Simple</button><button data-m="adv" aria-pressed="false">Avancé</button></div>
+      <button class="prof-btn" id="profBtn" aria-expanded="false" aria-controls="profPop" aria-label="Profil joueur"><i></i><span id="profSum">Profil</span></button>
+    </div>
+  </div>
+  <div class="prof-pop" id="profPop" hidden>
+    <h3>Profil joueur</h3>
+    <p class="note">Ces valeurs alimentent tous les calculs : échelle métrique, main de frappe, dispersion des simulations.</p>
+    <div class="field"><label for="pfH">Taille (cm)</label><input type="number" id="pfH" min="120" max="230" step="1"></div>
+    <div class="field"><label for="pfW">Poids (kg)</label><input type="number" id="pfW" min="30" max="160" step="1"></div>
+    <div class="field"><label for="pfHand">Main de frappe</label><select id="pfHand"><option value="right">Droitier</option><option value="left">Gaucher</option></select></div>
+    <div class="field"><label for="pfLvl">Niveau</label><select id="pfLvl"><option value="loisir">Loisir</option><option value="club">Club</option><option value="competition">Compétition</option><option value="pro">Pro / espoir</option></select></div>
+    <button class="btn sm solid" id="profOk">Valider</button>
+  </div>
+</header>
+
+<!-- ============ SÉANCE ============ -->
+<main class="view wrap" id="v-seance" data-view="seance" hidden>
+  <div class="vhead">
+    <div>
+      <div class="tag" id="srcTag">Séance · démo</div>
+      <h1 id="seanceTitle">Analyse de séance</h1>
+    </div>
+    <div class="acts">
+      <label class="btn solid" id="fileLbl">Importer une vidéo<input type="file" id="fileA" accept="video/*" aria-label="Importer une vidéo"></label>
+      <label class="btn" id="fileLbl2" title="Deux vues du même geste : synchronisation puis fusion 3D">2 caméras<input type="file" id="fileAB" accept="video/*" multiple aria-label="Importer deux vidéos"></label>
+      <button class="btn" id="demoBtn">Démo</button>
+      <button class="btn" id="cancelBtn" hidden>Annuler</button>
+      <button class="btn" id="exportBtn" hidden>Exporter le rapport</button>
+    </div>
+  </div>
+  <div class="status" id="status"><span class="msg" id="statusMsg">Chargement…</span><span class="bar" id="statusBar" hidden><i></i></span></div>
+  <div class="hscroll" id="strokes" role="group" aria-label="Frappes détectées" style="margin-bottom:14px"></div>
+
+  <div class="seance">
+    <div class="stack">
+      <section class="panel o1" aria-label="Lecture vidéo et squelette">
+        <div class="scene" id="scene">
+          <video id="vidA" playsinline muted preload="auto" hidden></video>
+          <canvas class="ov" id="ov" aria-label="Squelette superposé et traînée de raquette"></canvas>
+          <div class="pip" id="pip" hidden><span>CAM B</span><video id="vidB" playsinline muted preload="auto"></video></div>
+          <div class="sweep"></div>
+          <i class="aim a"></i><i class="aim b"></i><i class="aim c"></i><i class="aim d"></i>
+          <div class="hud tl"><div id="hudSrc">SRC <b>DÉMO</b></div><div id="hudT">T <b>0,000 s</b></div></div>
+          <div class="hud tr"><div>PHASE <b class="ph" id="hudPh">—</b></div><div id="hudFps"></div></div>
+          <div class="hud bl"><div id="hudA1"></div><div id="hudA2"></div></div>
+          <div class="hud br"><div id="hudA3"></div><div id="hudA4"></div></div>
+        </div>
+        <div class="transport">
+          <button class="ibtn" id="play" aria-label="Lecture"><svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg></button>
+          <button class="ibtn" id="prev" aria-label="Image précédente"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 2 4 7l5 5"/></svg></button>
+          <button class="ibtn" id="next" aria-label="Image suivante"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m5 2 5 5-5 5"/></svg></button>
+          <button class="ibtn wide" id="toImpact">Impact</button>
+          <span class="sp"></span>
+          <div class="seg" role="group" aria-label="Vitesse de lecture" id="speedSeg"><button data-sp="0.1">×0,1</button><button data-sp="0.25" aria-pressed="true">×0,25</button><button data-sp="1">×1</button></div>
+        </div>
+        <div class="tlwrap"><canvas class="tl" id="tl" aria-label="Frise des phases, glisse pour te déplacer"></canvas></div>
+      </section>
+
+      <section class="panel simple-only o3">
+        <div class="ph"><h2><i>01</i>Les 3 corrections prioritaires</h2><span class="lbl" id="fixLbl"></span></div>
+        <div class="fixes" id="fixes"></div>
+      </section>
+      <section class="panel adv-only o5">
+        <div class="ph"><h2><i>01</i>Toutes les mesures</h2><span class="lbl" id="tblLbl"></span></div>
+        <div class="scroll"><table class="t" id="mtable"><thead><tr><th>Mesure</th><th class="n">Valeur</th><th class="n">Cible</th><th>Écart</th></tr></thead><tbody></tbody></table></div>
+        <div class="fixes" id="fixesAll" style="border-top:1px solid var(--rule)"></div>
+      </section>
+      <section class="panel adv-only o6">
+        <div class="ph"><h2><i>02</i>Courbes du geste</h2><span class="lbl">normalisées · impact en orange</span></div>
+        <div class="pb charts">
+          <div><div class="lbl">Vitesses segmentaires (pic = point)</div><canvas class="chart" id="chV"></canvas>
+            <div class="legend"><span><i style="--c:var(--s4)"></i>Bassin</span><span><i style="--c:var(--s3)"></i>Buste</span><span><i style="--c:var(--s2)"></i>Coude</span><span><i style="--c:var(--s1)"></i>Poignet</span></div></div>
+          <div><div class="lbl">Angles (°)</div><canvas class="chart" id="chA"></canvas>
+            <div class="legend"><span><i style="--c:var(--s1)"></i>Coude</span><span><i class="dash" style="--c:var(--s2)"></i>Genou</span><span><i style="--c:var(--s3)"></i>Séparation hanches / épaules</span></div></div>
+        </div>
+      </section>
+      <section class="panel adv-only o7">
+        <div class="ph"><h2><i>03</i>Squelette 3D · centre de masse</h2><span class="lbl">glisse pour orienter</span></div>
+        <canvas class="v3d" id="v3d" aria-label="Squelette 3D orientable"></canvas>
+        <div class="pb" style="padding-top:10px"><div class="legend"><span><i class="dot" style="--c:var(--acc)"></i>Articulations du bras de frappe</span><span><i class="dot" style="--c:#fff"></i>Centre de masse</span><span><i class="dash" style="--c:var(--s3)"></i>Axes bassin / épaules</span><span><i style="--c:var(--s2)"></i>Trajectoire du poignet</span></div></div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="panel verdict o2" aria-label="Verdict">
+        <div class="vscore"><canvas id="ring" width="300" height="300" aria-label="Score du geste"></canvas><div><div class="lbl" id="vType">—</div><h3 id="vHead">—</h3><p id="vText"></p></div></div>
+        <div class="kpis" id="vKpis"></div>
+        <div class="ph" style="border-top:0;border-bottom:1px solid var(--rule);padding:12px 16px;display:flex;justify-content:space-between"><span class="lbl" style="margin:0">Chaîne cinétique</span><span class="lbl" style="margin:0" id="chainState"></span></div>
+        <div class="chain" id="chain"></div>
+      </section>
+      <section class="panel o4">
+        <div class="ph"><h2><i>04</i>Exercices</h2><span class="lbl">validés à la séance suivante</span></div>
+        <div class="exs" id="exs"></div>
+      </section>
+      <section class="panel o8">
+        <div class="ph"><h2><i>05</i>Qualité de la prise</h2><span class="lbl" id="qLbl"></span></div>
+        <div class="pb"><div class="qual"><div class="big" id="qScore">—<small>/100</small></div><div class="meter"><i id="qMeter"></i></div></div><ul class="issues" id="qIssues"></ul></div>
+        <div class="ph" style="border-top:1px solid var(--rule)"><h2><i>06</i>Prises demandées</h2></div>
+        <div class="pb asks" id="asks"></div>
+      </section>
+      <section class="panel o9">
+        <div class="ph"><h2><i>07</i>Fatigue sur la séance</h2><span class="lbl" id="fatLbl"></span></div>
+        <div class="pb fatigue" id="fatigue"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ============ OPTIMISEUR ============ -->
+<main class="view wrap" id="v-optimiseur" data-view="optimiseur" hidden>
+  <div class="vhead">
+    <div>
+      <div class="tag"><span>Simulation massive · <span id="oSrc">—</span></span></div>
+      <h1>Des millions de gestes testés pour trouver le tien</h1>
+      <p>Le moteur fait varier ta flexion, ta torsion, ton extension, ton timing, l'angle de face et ton matériel, rejoue chaque balle dans l'air et ne garde que les combinaisons sûres pour ton corps.</p>
+    </div>
+    <div class="acts">
+      <div class="seg" role="group" aria-label="Objectif" id="goalSeg"><button data-g="balanced" aria-pressed="true">Équilibré</button><button data-g="speed">Vitesse</button><button data-g="spin">Effet</button><button data-g="safety">Sécurité</button></div>
+      <button class="btn" id="optRun">Relancer</button>
+      <button class="btn solid" id="optMax">Lancer en max · 50 M</button>
+    </div>
+  </div>
+  <div class="opt-top" id="optTop">
+    <div class="counter"><div class="dotbg"></div>
+      <div class="lbl" id="oState">En attente d'une analyse</div>
+      <div class="n" id="oTrials">0<small>essais</small></div>
+      <div class="sub"><span><b id="oRate">—</b> essais/s</span><span><b id="oCores">—</b> cœurs</span><span><b id="oTime">0,0 s</b></span><span>budget <b id="oBudget">—</b></span></div>
+      <div class="cores" id="oCoreGrid"></div>
+      <div class="pbar"><i id="oBar"></i></div>
+    </div>
+    <div class="opt-gain">
+      <div><div class="lbl">Vitesse de balle · actuelle → optimale</div><div class="big" id="oGain">—</div></div>
+      <div><div class="lbl">Gain</div><div class="big" id="oPct" style="font-size:30px">—</div></div>
+      <p class="msg" id="oMsg">L'optimisation démarre toute seule dès qu'une analyse est terminée.</p>
+    </div>
+  </div>
+  <div class="opt-main">
+    <div class="stack">
+      <section class="panel">
+        <div class="ph"><h2><i>01</i>Nuage des variantes · frontière vitesse ↔ sécurité</h2><span class="lbl" id="cloudLbl"></span></div>
+        <div style="position:relative"><canvas class="cloud" id="cloud" aria-label="Nuage de points des variantes simulées : vitesse de balle en abscisse, balles bonnes en ordonnée"></canvas><div class="tip" id="cloudTip" hidden></div></div>
+        <div class="pb" style="padding-top:8px"><div class="legend"><span><i class="dot" style="--c:var(--s3)"></i>Variante simulée</span><span><i style="--c:#fff"></i>Frontière (meilleur compromis)</span><span><i class="dot" style="--c:var(--acc)"></i>Ton geste actuel</span><span><i class="dot" style="--c:#fff"></i>Optimum retenu</span></div></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2><i>02</i>Sensibilité · ce qui rapporte le plus</h2><span class="lbl">un seul réglage changé à la fois</span></div>
+        <div class="pb sens" id="sens"></div>
+      </section>
+    </div>
+    <div class="stack">
+      <section class="panel">
+        <div class="ph"><h2><i>03</i>Meilleur geste</h2><span class="lbl">actuel → optimal</span></div>
+        <div class="scroll"><table class="t" id="bestGest"><tbody></tbody></table></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><h2><i>04</i>Meilleur matériel</h2><span class="lbl" id="eqLbl"></span></div>
+        <div class="scroll"><table class="t" id="bestEq"><tbody></tbody></table></div>
+      </section>
+      <section class="panel adv-only">
+        <div class="ph"><h2><i>05</i>Progression de la recherche</h2><span class="lbl">meilleure vitesse trouvée</span></div>
+        <canvas class="small" id="optTrace" style="height:140px"></canvas>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ============ MATÉRIEL ============ -->
+<main class="view wrap" id="v-materiel" data-view="materiel" hidden>
+  <div class="vhead">
+    <div><div class="tag">Banc matériel</div><h1>Raquette, plombs et cordage, réglés sur ton geste</h1></div>
+    <div class="acts"><div class="seg" role="group" aria-label="Coup" id="mStroke"><button data-s="serve" aria-pressed="true">Service</button><button data-s="forehand">Coup droit</button><button data-s="backhand">Revers</button></div></div>
+  </div>
+  <div class="bench">
+    <aside aria-label="Réglages du matériel" id="mAside"></aside>
+    <div class="stack" id="mMain">
+      <section class="panel"><div class="ph"><h2><i>01</i>Raquette</h2><span class="lbl">effet des plombs en direct</span></div>
+        <div class="pb grid g2"><div><div class="kpis" id="rkK" style="border-top:1px solid var(--rule);border-left:1px solid var(--rule)"></div><p class="formula adv-only">SW′ = SW + m·(d − 10)² · équilibre′ = (m·b + m_p·d) / (m + m_p) · masse effective = 1 / (1/m + x²/I_cm)</p></div><canvas class="racket" id="rkCv" aria-label="Schéma de la raquette avec plombs, équilibre et centre de percussion"></canvas></div></section>
+      <section class="panel"><div class="ph"><h2><i>02</i>Cordage et perte de tension</h2><span class="lbl">tension réelle aujourd'hui</span></div>
+        <div class="pb grid g2"><div><div class="kpis" id="stK" style="border-top:1px solid var(--rule);border-left:1px solid var(--rule)"></div><div id="stAlert"></div></div><div><canvas class="small" id="stCv" aria-label="Courbe de perte de tension sur 60 jours"></canvas><div class="legend"><span><i style="--c:#fff"></i>Ton cordage</span><span><i class="dash" style="--c:var(--acc)"></i>Seuil de recordage (−20 %)</span></div></div></div></section>
+      <section class="panel"><div class="ph"><h2><i>03</i>Cordage recommandé pour ton geste</h2><div class="seg" role="group" aria-label="Objectif" id="mGoal"><button data-g="speed">Vitesse</button><button data-g="spin" aria-pressed="true">Effet</button><button data-g="control">Contrôle</button><button data-g="comfort">Confort</button></div></div>
+        <div class="pb"><div class="recs" id="recs"></div><p class="note" style="margin-top:10px">5 matériaux × 3 jauges × 11 tensions = 165 cordages simulés avec ton geste, classés selon l'objectif, avec une pénalité aux tensions extrêmes pour le bras.</p></div></section>
+      <section class="panel"><div class="ph"><h2><i>04</i>Impact raquette-balle</h2><span class="lbl">les 4 millisecondes de contact</span></div><div class="kpis k3" id="imK"></div></section>
+      <section class="panel"><div class="ph"><h2><i>05</i>Comparer les raquettes avec ton geste</h2><span class="lbl">même swing, même cordage</span></div>
+        <div class="scroll"><table class="t" id="cmp"><thead><tr><th>Raquette</th><th class="n">Masse</th><th class="n">SW</th><th class="n">Balle</th><th class="n">Effet</th><th class="n">Confort</th><th class="n">Balles bonnes</th></tr></thead><tbody></tbody></table></div>
+        <p class="note pb" style="padding-top:10px">Balles bonnes : 250 frappes simulées par raquette avec la dispersion de ton niveau, en visant l'angle de départ le plus sûr.</p></section>
+    </div>
+  </div>
+</main>
+
+<!-- ============ BALLE ============ -->
+<main class="view wrap" id="v-balle" data-view="balle" hidden>
+  <div class="vhead">
+    <div><div class="tag">Vol de balle</div><h1>Trajectoire, rebond et marge de sécurité</h1></div>
+    <div class="acts"><div class="seg" role="group" aria-label="Coup" id="bStroke"><button data-s="serve" aria-pressed="true">Service</button><button data-s="forehand">Coup droit</button><button data-s="backhand">Revers</button></div></div>
+  </div>
+  <div class="bench">
+    <aside aria-label="Réglages du vol" id="bAside"></aside>
+    <div class="stack">
+      <section class="panel"><div class="ph"><h2><i>01</i>Trajectoire et rebond</h2><span class="lbl" id="trLbl"></span></div>
+        <div class="pb"><canvas class="court" id="trCv" aria-label="Trajectoire de la balle vue de côté, filet et lignes"></canvas>
+        <div class="legend"><span><i style="--c:#fff"></i>Ta frappe</span><span><i class="dash" style="--c:var(--s3)"></i>Même frappe sans effet</span><span><i class="dash" style="--c:var(--s4)"></i>Sans air</span><span><i class="dot" style="--c:var(--acc)"></i>Rebond</span></div></div>
+        <div class="kpis k3" id="trK" style="border-top:1px solid var(--rule)"></div>
+        <p class="formula pb adv-only" style="margin:0">m·a = m·g − ½ρ·A·C_d·|v|·v + ½ρ·A·C_L·|v|·(ω̂ × v) · C_d = 0,55 · C_L = 1/(2 + v/(r·ω)) · ρ selon altitude et température · RK4 pas 2 ms</p></section>
+      <section class="panel"><div class="ph"><h2><i>02</i>Marge de sécurité · Monte-Carlo</h2><button class="btn sm" id="mcBtn">Lancer la simulation</button></div>
+        <div class="pb"><div class="mc-out"><div><div class="lbl">Balles bonnes</div><div class="big" id="mcRate">—<small>%</small></div><div class="bar3" id="mcBar"></div><div class="legend"><span><i style="--c:#fff"></i>Bonnes</span><span><i style="--c:var(--acc)"></i>Filet</span><span><i style="--c:var(--s4)"></i>Long</span></div></div><canvas class="small" id="mcCv" aria-label="Taux de réussite selon la vitesse de balle"></canvas></div>
+        <p class="note" id="mcNote" style="margin-top:12px"></p></div></section>
+    </div>
+  </div>
+</main>
+
+<!-- ============ PROGRESSION ============ -->
+<main class="view wrap" id="v-progression" data-view="progression" hidden>
+  <div class="vhead">
+    <div><div class="tag">Historique</div><h1>Ta progression, séance après séance</h1></div>
+    <div class="acts"><div class="seg" role="group" aria-label="Coup" id="pStroke"><button data-s="serve" aria-pressed="true">Service</button><button data-s="forehand">Coup droit</button><button data-s="backhand">Revers</button></div></div>
+  </div>
+  <div id="pBanner"></div>
+  <div class="metrics-grid" id="pCards"></div>
+  <div class="grid g2" style="margin-top:16px">
+    <section class="panel"><div class="ph"><h2><i>02</i>Exercices</h2><span class="lbl">validés automatiquement par la mesure</span></div><div class="exlist" id="pEx"></div></section>
+    <section class="panel"><div class="ph"><h2><i>03</i>Séances</h2><button class="btn sm" id="pClear" hidden>Effacer l'historique</button></div><div class="scroll"><table class="t" id="pTable"><thead><tr><th>Date</th><th>Source</th><th class="n">Frappes</th><th class="n">Score</th><th class="n">Raquette</th></tr></thead><tbody></tbody></table></div></section>
+  </div>
+</main>
+
+<!-- ============ COACH ============ -->
+<main class="view wrap" id="v-coach" data-view="coach" hidden>
+  <div class="vhead">
+    <div><div class="tag">Coach IA</div><h1>Pose tes questions sur ta séance</h1><p>Le coach répond uniquement avec les mesures de ta séance : il cite les chiffres et n'en invente aucun.</p></div>
+  </div>
+  <div class="coach">
+    <section class="panel chat">
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="sugs" id="sugs"></div>
+      <form class="compose" id="compose"><textarea id="q" placeholder="Ta question sur la séance…" aria-label="Ta question"></textarea><button class="btn solid" id="send" type="submit">Envoyer</button><button class="btn" id="stop" type="button" hidden>Stop</button></form>
+    </section>
+    <section class="panel adv-only"><div class="ph"><h2><i>·</i>Données envoyées au coach</h2></div><div class="pb"><pre class="ctx" id="ctx"></pre></div></section>
+    <section class="panel simple-only"><div class="ph"><h2><i>·</i>Ce que le coach sait</h2></div><div class="pb"><p class="note" id="ctxSimple"></p></div></section>
+  </div>
+</main>
+
+<script type="module" src="./ui/app.js"></script>
+</body>
+</html>
